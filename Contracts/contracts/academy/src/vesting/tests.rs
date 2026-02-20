@@ -115,9 +115,7 @@ use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, token, Addres
 
         client.init(&admin, &token_id, &governance);
 
-    let grant_id = env.as_contract(&contract_id, || {
-        AcademyVestingContract::grant_vesting(env.clone(), admin.clone(), beneficiary.clone(), 500, 0, 0, 100)
-    }).unwrap();
+    let grant_id = client.grant_vesting(&admin, &beneficiary, &500, &0, &0, &100);
 
         token_admin.mint(&contract_id, &500);
         set_timestamp_v2(&env, 200);
@@ -155,9 +153,7 @@ use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, token, Addres
         let other = Address::generate(&env);
 
         client.init(&admin, &token_id, &governance);
-    let grant_id = env.as_contract(&contract_id, || {
-        AcademyVestingContract::grant_vesting(env.clone(), admin.clone(), beneficiary.clone(), 500, 0, 0, 100)
-    }).unwrap();
+    let grant_id = client.grant_vesting(&admin, &beneficiary, &500, &0, &0, &100);
         set_timestamp_v2(&env, 200);
 
         let result = client.try_claim(&grant_id, &other);
@@ -191,9 +187,7 @@ use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, token, Addres
         let client = AcademyVestingContractClient::new(&env, &contract_id);
 
         client.init(&admin, &token_id, &governance);
-    let grant_id = env.as_contract(&contract_id, || {
-        AcademyVestingContract::grant_vesting(env.clone(), admin.clone(), beneficiary.clone(), 500, 1000, 500, 2000)
-    }).unwrap();
+    let grant_id = client.grant_vesting(&admin, &beneficiary, &500, &1000, &500, &2000);
         token_admin.mint(&contract_id, &500);
         set_timestamp_v2(&env, 1200);
 
@@ -211,9 +205,7 @@ use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, token, Addres
         let non_admin = Address::generate(&env);
 
         client.init(&admin, &token_id, &governance);
-    let grant_id = env.as_contract(&contract_id, || {
-        AcademyVestingContract::grant_vesting(env.clone(), admin.clone(), beneficiary.clone(), 500, 0, 0, 100)
-    }).unwrap();
+    let grant_id = client.grant_vesting(&admin, &beneficiary, &500, &0, &0, &100);
 
     let invalid_timelock = env.as_contract(&contract_id, || {
         AcademyVestingContract::revoke(env.clone(), grant_id, admin.clone(), 100)
