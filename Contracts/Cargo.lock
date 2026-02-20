@@ -827,6 +827,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "privacy-token"
+version = "0.1.0"
+dependencies = [
+ "shared",
+ "soroban-sdk",
+]
+
+[[package]]
+name = "privacy-trading"
+version = "0.1.0"
+dependencies = [
+ "shared",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"

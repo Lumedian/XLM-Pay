@@ -21,6 +21,14 @@ The backend is responsible for securely managing the core application logic, dat
 Text & voice-based AI crypto mentor
 Explains trading strategies, blockchain concepts, and Stellar-specific tools
 Provides market insights & educational guidance (not financial advice)
+
+🛡️ **Error handling & Observability**
+* Structured JSON logging with correlation IDs for tracing requests across services (`x-correlation-id` header is emitted on every response)
+* Global exception filter with error categorization and severity levels
+* Centralized error tracking stub (easily swapped for Sentry/Datadog)
+* Prometheus metrics exposed at `/metrics` including error rate counters
+* Critical errors automatically escalate to alerts
+
 🎓 Crypto Academy
 Structured learning paths (Beginner → Pro)
 Stellar & Soroban smart contract education

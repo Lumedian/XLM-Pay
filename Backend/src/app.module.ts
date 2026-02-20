@@ -6,6 +6,10 @@ import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
+// logging and error handling
+import { LoggingModule } from './logging/logging.module';
+import { StructuredLogger } from './logging/structured-logger.service';
+
 import { RedisModule } from './redis/redis.module';
 import { VoiceModule } from './voice/voice.module';
 // DatabaseModule removed - using PostgreSQL config in this module instead
@@ -26,12 +30,17 @@ import { RefreshToken } from './auth/entities/refresh-token.entity';
 import { ApiToken } from './auth/entities/api-token.entity';
 import { AuditModule } from './audit/audit.module';
 import { AuditLog } from './audit/audit.entity';
+import { GdprModule } from './gdpr/gdpr.module';
+import { Consent } from './gdpr/entities/consent.entity';
 import { VoiceJob } from './voice/entities/voice-job.entity';
 import { ThrottleModule } from './throttle/throttle.module';
 
 
 @Module({
   imports: [
+    // logging comes first so correlation middleware wraps every request
+    LoggingModule,
+
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -56,6 +65,7 @@ import { ThrottleModule } from './throttle/throttle.module';
           RefreshToken,
           ApiToken,
           AuditLog,
+          Consent,
           VoiceJob,
         ],
         synchronize: configService.get('NODE_ENV') === 'development',
@@ -71,6 +81,7 @@ import { ThrottleModule } from './throttle/throttle.module';
     QueueModule,
     MarketDataModule,
     AuditModule,
+    GdprModule,
     ThrottleModule,
   ],
 
@@ -86,6 +97,11 @@ import { ThrottleModule } from './throttle/throttle.module';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    // replace the default Nest logger with our structured implementation
+    {
+      provide: Logger,
+      useClass: StructuredLogger,
     },
   ],
 })
