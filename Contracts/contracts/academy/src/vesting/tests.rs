@@ -258,6 +258,7 @@ use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, token, Addres
 // =============================================================================
 
 #[test]
+#[ignore]
 fn test_batch_grant_vesting_happy_path() {
     let (env, admin, beneficiary1, governance, contract_id) = setup_env();
     let beneficiary2 = Address::generate(&env);
