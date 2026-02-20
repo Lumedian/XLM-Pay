@@ -329,3 +329,31 @@ fn test_oracle_refresh_updates_status() {
     assert_eq!(status.last_source_count, 1);
     assert_eq!(status.consecutive_failures, 0);
 }
+
+#[test]
+fn bench_many_trades() {
+    let _guard = serial_lock();
+    let (env, admin, approver, executor, contract_id) = setup_env();
+    let client = UpgradeableTradingContractClient::new(&env, &contract_id);
+    let mut approvers = Vec::new(&env);
+    approvers.push_back(approver);
+    init_contract(&client, &admin, approvers, &executor);
+
+    let (token_id, _token_client, token_admin) = setup_fee_token(&env);
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    token_admin.mint(&trader, &1_000_000);
+
+    for _ in 0..100 {
+        let _ = client.trade(
+            &trader,
+            &Symbol::new(&env, "XLMUSDC"),
+            &250,
+            &10,
+            &true,
+            &token_id,
+            &100,
+            &fee_recipient,
+        );
+    }
+}

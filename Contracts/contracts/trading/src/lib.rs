@@ -224,18 +224,8 @@ impl UpgradeableTradingContract {
         stats.total_volume += amount;
         stats.last_trade_id = trade_id;
 
-        // Store trade
-        let trades_key = symbol_short!("trades");
-        let mut trades: soroban_sdk::Vec<Trade> = env
-            .storage()
-            .persistent()
-            .get(&trades_key)
-            .unwrap_or_else(|| soroban_sdk::Vec::new(&env));
+        env.events().publish((symbol_short!("trade"),), trade);
 
-        trades.push_back(trade);
-
-        // Update persistent storage
-        env.storage().persistent().set(&trades_key, &trades);
         env.storage().persistent().set(&stats_key, &stats);
 
         Ok(trade_id)

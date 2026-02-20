@@ -1,4 +1,4 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, symbol_short, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, symbol_short};
 
 /// Vesting schedule for an academy reward
 #[contracttype]
