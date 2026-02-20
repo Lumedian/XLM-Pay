@@ -3,7 +3,7 @@
 extern crate std;
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, testutils::Events, token, Address, Env, Symbol, TryIntoVal, Vec};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, testutils::Events, token, Address, Env, Symbol, TryIntoVal, Vec, symbol_short};
 
 fn setup_env() -> (Env, Address, Address, Address) {
     let env = Env::default();
@@ -441,7 +441,7 @@ fn test_batch_add_reward_size_limit() {
 
     // Create batch with more than MAX_BATCH_SIZE (30) requests
     let mut requests = Vec::new(&env);
-    for i in 0..31 {
+    for _i in 0..31 {
         requests.push_back(BatchRewardRequest {
             user: user.clone(),
             amount: 10,
