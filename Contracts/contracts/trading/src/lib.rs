@@ -4,7 +4,7 @@ use shared::fees::{FeeManager, FeeError};
 use shared::governance::{
     GovernanceManager, GovernanceRole, UpgradeProposal,
 };
-use shared::oracle::{OracleAggregate, OracleError, fetch_aggregate_price};
+use shared::oracle::{OracleAggregate, fetch_aggregate_price};
 
 /// Version of this contract implementation
 const CONTRACT_VERSION: u32 = 1;

@@ -250,6 +250,7 @@ impl SocialRewardsStorage {
     // ============ Migration Support ============
     
     /// Check if migration is needed
+    #[allow(dead_code)]
     pub fn needs_migration(env: &Env) -> bool {
         Self::get_version(env) < CONTRACT_VERSION
     }
@@ -325,7 +326,6 @@ mod tests {
     fn test_data_key_variants() {
         // Test that data keys can be created and are distinct
         let key1 = SocialRewardsDataKey::Init;
-        let key2 = SocialRewardsDataKey::Stats;
         let key3 = SocialRewardsDataKey::Reward(1);
         
         // Just verify they compile and are different variants
