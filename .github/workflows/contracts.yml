@@ -14,5 +14,8 @@ jobs:
         with:
           toolchain: stable
           override: true
-      - run: cargo test --all
+      - name: Run workspace tests with backtrace
         working-directory: Contracts
+        env:
+          RUST_BACKTRACE: 1
+        run: cargo test --all -- --nocapture --test-threads=1
