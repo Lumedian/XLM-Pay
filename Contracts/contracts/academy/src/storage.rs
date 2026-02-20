@@ -253,7 +253,6 @@ mod tests {
     fn test_data_key_variants() {
         // Test that data keys can be created and are distinct
         let key1 = AcademyDataKey::Init;
-        let key2 = AcademyDataKey::Counter;
         let key3 = AcademyDataKey::Schedule(1);
         
         // Just verify they compile and are different variants

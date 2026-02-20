@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, symbol_short};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol};
 use shared::events::{EventEmitter, RewardAddedEvent, RewardClaimedEvent};
 
 mod storage;
