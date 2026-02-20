@@ -1,3 +1,4 @@
+#![allow(unexpected_cfgs)]
 //! Shared utilities and types for Stellara contracts
 
 use soroban_sdk::{contracttype, String};

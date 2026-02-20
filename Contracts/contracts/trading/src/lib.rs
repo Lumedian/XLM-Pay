@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(unexpected_cfgs)]
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, symbol_short};
 use shared::fees::{FeeManager, FeeError};
 use shared::governance::{
