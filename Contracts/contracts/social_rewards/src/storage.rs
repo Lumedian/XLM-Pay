@@ -151,11 +151,6 @@ impl SocialRewardsStorage {
         env.storage().persistent().get(&SocialRewardsDataKey::Reward(reward_id))
     }
     
-    /// Check if reward exists
-    pub fn has_reward(env: &Env, reward_id: u64) -> bool {
-        env.storage().persistent().has(&SocialRewardsDataKey::Reward(reward_id))
-    }
-    
     /// Update reward (for claim status changes)
     pub fn update_reward(env: &Env, reward: &OptimizedReward) {
         let key = SocialRewardsDataKey::Reward(reward.id);
@@ -198,22 +193,6 @@ impl SocialRewardsStorage {
         }
         
         rewards
-    }
-    
-    /// Get pending (unclaimed) rewards for a user with lazy loading
-    pub fn get_user_pending_rewards(env: &Env, user: &Address) -> Vec<OptimizedReward> {
-        let reward_ids = Self::get_user_reward_ids(env, user);
-        let mut pending = Vec::new(env);
-        
-        for reward_id in reward_ids.iter() {
-            if let Some(reward) = Self::get_reward(env, reward_id) {
-                if !reward.claimed {
-                    pending.push_back(reward);
-                }
-            }
-        }
-        
-        pending
     }
     
     /// Calculate pending rewards total for a user
@@ -268,23 +247,10 @@ impl SocialRewardsStorage {
     
     // ============ Batch Operations ============
     
-    /// Batch set rewards - more efficient for bulk operations
-    pub fn batch_set_rewards(env: &Env, rewards: &[OptimizedReward]) {
-        for reward in rewards.iter() {
-            Self::set_reward(env, reward);
-        }
-    }
-    
-    /// Batch update rewards
-    pub fn batch_update_rewards(env: &Env, rewards: &[OptimizedReward]) {
-        for reward in rewards.iter() {
-            Self::update_reward(env, reward);
-        }
-    }
-    
     // ============ Migration Support ============
     
     /// Check if migration is needed
+    #[allow(dead_code)]
     pub fn needs_migration(env: &Env) -> bool {
         Self::get_version(env) < CONTRACT_VERSION
     }
@@ -360,7 +326,6 @@ mod tests {
     fn test_data_key_variants() {
         // Test that data keys can be created and are distinct
         let key1 = SocialRewardsDataKey::Init;
-        let key2 = SocialRewardsDataKey::Stats;
         let key3 = SocialRewardsDataKey::Reward(1);
         
         // Just verify they compile and are different variants
