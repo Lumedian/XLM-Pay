@@ -1,0 +1,65 @@
+{
+  "proofs": [
+    {
+      "name": "transfer_non_negative_amount",
+      "description": "Verify that transfer rejects negative amounts",
+      "expected_result": "safe",
+      "timeout": 30
+    },
+    {
+      "name": "transfer_amount_conservation",
+      "description": "Verify amount conservation in transfers",
+      "expected_result": "safe",
+      "timeout": 60
+    },
+    {
+      "name": "approve_expiration_validation",
+      "description": "Verify approval expiration validation",
+      "expected_result": "safe",
+      "timeout": 30
+    },
+    {
+      "name": "transfer_from_allowance_check",
+      "description": "Verify allowance checking in transfer_from",
+      "expected_result": "safe",
+      "timeout": 45
+    },
+    {
+      "name": "mint_supply_bounds",
+      "description": "Verify supply bounds in mint operations",
+      "expected_result": "safe",
+      "timeout": 30
+    },
+    {
+      "name": "burn_balance_sufficiency",
+      "description": "Verify balance sufficiency in burn operations",
+      "expected_result": "safe",
+      "timeout": 30
+    },
+    {
+      "name": "arithmetic_safety_overflow",
+      "description": "Verify arithmetic operations are safe from overflow",
+      "expected_result": "safe",
+      "timeout": 20
+    },
+    {
+      "name": "authorization_enforcement",
+      "description": "Verify authorization is properly enforced",
+      "expected_result": "safe",
+      "timeout": 25
+    },
+    {
+      "name": "total_supply_conservation",
+      "description": "Verify total supply conservation invariant",
+      "expected_result": "safe",
+      "timeout": 35
+    }
+  ],
+  "default_timeout": 30,
+  "unwind_bound": 1000,
+  "kani_args": [
+    "--no-assertion-reach-checks",
+    "--enable-unstable",
+    "--output-format=terse"
+  ]
+}

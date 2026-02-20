@@ -53,6 +53,7 @@ describe('Auth Integration Tests (e2e)', () => {
   describe('Successful Login Flow', () => {
     let accessToken: string;
     let refreshToken: string;
+    let refreshTokenId: string;
     let nonce: string;
 
     it('should request a nonce', async () => {
@@ -90,6 +91,7 @@ describe('Auth Integration Tests (e2e)', () => {
 
       accessToken = response.body.accessToken;
       refreshToken = response.body.refreshToken;
+      refreshTokenId = response.body.refreshTokenId;
     });
 
     it('should access protected endpoint with access token', async () => {
@@ -105,15 +107,17 @@ describe('Auth Integration Tests (e2e)', () => {
     it('should refresh access token', async () => {
       const response = await request(app.getHttpServer())
         .post('/auth/refresh')
-        .send({ refreshToken })
+        .send({ refreshTokenId, refreshToken })
         .expect(200);
 
       expect(response.body).toHaveProperty('accessToken');
       expect(response.body).toHaveProperty('refreshToken');
-      
+      expect(response.body).toHaveProperty('refreshTokenId');
+
       // New tokens should be different
       expect(response.body.accessToken).not.toBe(accessToken);
       expect(response.body.refreshToken).not.toBe(refreshToken);
+      expect(response.body.refreshTokenId).not.toBe(refreshTokenId);
     });
 
     it('should logout successfully', async () => {
