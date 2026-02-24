@@ -1,6 +1,9 @@
 #[cfg(test)]
 mod test {
-    use crate::{AcademyRewardsContract, AcademyRewardsContractClient, Badge, BadgeMetadata, ContractError, DataKey};
+    use crate::{
+        AcademyRewardsContract, AcademyRewardsContractClient, Badge, BadgeMetadata, ContractError,
+        DataKey,
+    };
     use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, Env, String};
 
     fn setup_env() -> (Env, Address, Address, Address) {
@@ -73,14 +76,7 @@ mod test {
         assert_eq!(missing_type, Err(Ok(ContractError::BadgeTypeNotFound)));
 
         // Create a badge type
-        client.create_badge_type(
-            &admin,
-            &1,
-            &String::from_str(&env, "Bronze"),
-            &500,
-            &10,
-            &0,
-        );
+        client.create_badge_type(&admin, &1, &String::from_str(&env, "Bronze"), &500, &10, &0);
 
         // Disable badge type by running inside contract context
         env.as_contract(&contract_id, || {
@@ -137,14 +133,7 @@ mod test {
         let client = AcademyRewardsContractClient::new(&env, &contract_id);
 
         client.initialize(&admin);
-        client.create_badge_type(
-            &admin,
-            &1,
-            &String::from_str(&env, "Bronze"),
-            &500,
-            &1,
-            &10,
-        );
+        client.create_badge_type(&admin, &1, &String::from_str(&env, "Bronze"), &500, &1, &10);
 
         // No badge
         let no_badge = client.try_redeem_badge(&user, &String::from_str(&env, "tx_0"));
@@ -183,14 +172,7 @@ mod test {
         let client = AcademyRewardsContractClient::new(&env, &contract_id);
 
         client.initialize(&admin);
-        client.create_badge_type(
-            &admin,
-            &1,
-            &String::from_str(&env, "Bronze"),
-            &500,
-            &2,
-            &0,
-        );
+        client.create_badge_type(&admin, &1, &String::from_str(&env, "Bronze"), &500, &2, &0);
         client.mint_badge(&admin, &user, &1);
 
         assert_eq!(client.get_user_discount(&user), 500);
@@ -211,14 +193,7 @@ mod test {
         let client = AcademyRewardsContractClient::new(&env, &contract_id);
 
         client.initialize(&admin);
-        client.create_badge_type(
-            &admin,
-            &1,
-            &String::from_str(&env, "Bronze"),
-            &500,
-            &1,
-            &0,
-        );
+        client.create_badge_type(&admin, &1, &String::from_str(&env, "Bronze"), &500, &1, &0);
         client.mint_badge(&admin, &user, &1);
 
         let meta = client.get_badge_metadata(&1).unwrap();

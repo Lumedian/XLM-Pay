@@ -1,6 +1,8 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, contracterror, Address, Env, String, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol,
+};
 
 // Contract Errors
 #[contracterror]
@@ -32,7 +34,7 @@ pub enum DataKey {
     RedemptionHistory(Address, u32), // Track redemptions
     TotalBadgesMinted(u32),          // Counter per badge type
     PausedState,
-    UsedTransactionHash(String),     // Track used transaction hashes globally
+    UsedTransactionHash(String), // Track used transaction hashes globally
 }
 
 // Badge struct
@@ -85,7 +87,7 @@ impl AcademyRewardsContract {
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::PausedState, &false);
-        
+
         Ok(())
     }
 
@@ -124,7 +126,7 @@ impl AcademyRewardsContract {
         env.storage()
             .persistent()
             .set(&DataKey::TotalBadgesMinted(badge_type), &0u32);
-            
+
         Ok(())
     }
 
@@ -194,7 +196,7 @@ impl AcademyRewardsContract {
             (Symbol::new(&env, "badge_minted"),),
             (recipient, badge_type, env.ledger().timestamp()),
         );
-        
+
         Ok(())
     }
 
@@ -212,7 +214,7 @@ impl AcademyRewardsContract {
                 (Symbol::new(&env, "badge_revoked"),),
                 (user, badge.badge_type),
             );
-            
+
             Ok(())
         } else {
             Err(ContractError::UserHasNoBadge)
@@ -362,7 +364,7 @@ impl AcademyRewardsContract {
         if admin != &stored_admin {
             return Err(ContractError::Unauthorized);
         }
-        
+
         Ok(())
     }
 
@@ -376,7 +378,7 @@ impl AcademyRewardsContract {
         if paused {
             return Err(ContractError::ContractPaused);
         }
-        
+
         Ok(())
     }
 }
