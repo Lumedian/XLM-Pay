@@ -4,6 +4,18 @@ use crate::events::{
 };
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
+/// Parameters for creating an upgrade proposal
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct UpgradeProposalParams {
+    pub new_contract_hash: Symbol,
+    pub target_contract: Address,
+    pub description: Symbol,
+    pub approval_threshold: u32,
+    pub approvers: Vec<Address>,
+    pub timelock_delay: u64,
+}
+
 /// Upgrade proposal that must be approved via governance
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -92,6 +104,7 @@ impl GovernanceManager {
     }
 
     /// Create a new upgrade proposal
+    #[allow(clippy::too_many_arguments)]
     pub fn propose_upgrade(
         env: &Env,
         proposer: Address,
@@ -106,7 +119,7 @@ impl GovernanceManager {
         Self::require_role(env, &proposer, GovernanceRole::Admin);
 
         // Validate threshold
-        if approval_threshold == 0 || approval_threshold > approvers.len() as u32 {
+        if approval_threshold == 0 || approval_threshold > approvers.len() {
             return Err(GovernanceError::InvalidThreshold);
         }
 

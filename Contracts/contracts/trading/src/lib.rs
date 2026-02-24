@@ -116,6 +116,7 @@ impl UpgradeableTradingContract {
     }
 
     /// Execute a trade with fee collection
+    #[allow(clippy::too_many_arguments)]
     pub fn trade(
         env: Env,
         trader: Address,
