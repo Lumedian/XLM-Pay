@@ -23,7 +23,7 @@
 #![allow(unexpected_cfgs)]
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Symbol, Vec};
-use shared::privacy::PrivacyPool;
+use shared::privacy::{PrivacyPool, MerkleProof};
 
 #[cfg(test)]
 use shared::privacy::utils;
@@ -54,6 +54,10 @@ pub enum PrivateTradeError {
     OrderExpired = 10,
     /// Invalid price
     InvalidPrice = 11,
+    /// Commitment mismatch
+    CommitmentMismatch = 12,
+    /// Token verification failed
+    TokenVerificationFailed = 13,
 }
 
 impl From<PrivateTradeError> for soroban_sdk::Error {
@@ -69,10 +73,10 @@ impl From<&PrivateTradeError> for soroban_sdk::Error {
 }
 
 impl From<soroban_sdk::Error> for PrivateTradeError {
-    fn from(_err: soroban_sdk::Error) -> Self {
-        PrivateTradeError::InvalidProof
+        fn from(_err: soroban_sdk::Error) -> Self {
+            PrivateTradeError::TokenVerificationFailed
+        }
     }
-}
 
 /// Contract data keys
 #[contracttype]
@@ -213,6 +217,51 @@ impl PrivateTradingContract {
         Ok(())
     }
 
+    /// Verify that a commitment exists in a token contract
+    pub fn verify_token_state(
+        env: &Env,
+        token: Address,
+        proof: MerkleProof,
+    ) -> bool {
+        // Call token contract to get current Merkle root
+        // We assume the token contract implements `merkle_root` function
+        let root: shared::privacy::MerkleRoot = env.invoke_contract(
+            &token,
+            &Symbol::new(env, "merkle_root"),
+            soroban_sdk::vec![env],
+        );
+        
+        // Debug events
+        env.events().publish(
+            (Symbol::new(env, "debug_verify"), Symbol::new(env, "root")),
+            root.hash.clone(),
+        );
+        env.events().publish(
+            (Symbol::new(env, "debug_verify"), Symbol::new(env, "proof")),
+            proof.root.clone(),
+        );
+
+        // Verify proof matches root
+        if root.hash != proof.root {
+            env.events().publish(
+                (Symbol::new(env, "debug_verify"), Symbol::new(env, "fail_root")),
+                (root.hash, proof.root),
+            );
+            return false;
+        }
+        
+        // Verify proof validity
+        if !PrivacyPool::verify_merkle_proof(env, &proof) {
+            env.events().publish(
+                (Symbol::new(env, "debug_verify"), Symbol::new(env, "fail_proof")),
+                (),
+            );
+            return false;
+        }
+
+        true
+    }
+
     /// Create a private order
     /// Trader provides commitment to amount and nullifier hash
     pub fn create_order(
@@ -223,6 +272,7 @@ impl PrivateTradingContract {
         amount_commitment: BytesN<32>,
         nullifier_hash: BytesN<32>,
         expires_at: u64,
+        proof: MerkleProof,
     ) -> Result<u64, PrivateTradeError> {
         trader.require_auth();
 
@@ -238,6 +288,22 @@ impl PrivateTradingContract {
 
         if expires_at <= env.ledger().timestamp() {
             return Err(PrivateTradeError::OrderExpired);
+        }
+
+        // Verify commitment matches proof
+        if proof.leaf != amount_commitment {
+            return Err(PrivateTradeError::CommitmentMismatch);
+        }
+
+        // Verify commitment existence in token contract
+        let token_pair = Self::token_pair(env);
+        let token_address = match side {
+            OrderSide::Buy => token_pair.quote_token,
+            OrderSide::Sell => token_pair.base_token,
+        };
+
+        if !Self::verify_token_state(env, token_address, proof) {
+            return Err(PrivateTradeError::TokenVerificationFailed);
         }
 
         // Check nullifier hasn't been used
@@ -530,11 +596,18 @@ impl PrivateTradingContract {
 }
 
 #[cfg(test)]
+mod test_utils;
+#[cfg(test)]
+mod cross_contract_tests;
+#[cfg(test)]
+mod integration_tests;
+#[cfg(test)]
 mod tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Env};
+    use crate::test_utils::{MockTokenContract, MockTokenContractClient};
 
-    fn setup_env() -> (Env, Address, Address, Address, PrivateTradingContractClient<'static>) {
+    fn setup_env() -> (Env, Address, MockTokenContractClient<'static>, MockTokenContractClient<'static>, PrivateTradingContractClient<'static>) {
         let env = Env::default();
         env.mock_all_auths();
 
@@ -542,21 +615,26 @@ mod tests {
         let client = PrivateTradingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
-        let base_token = Address::generate(&env);
-        let quote_token = Address::generate(&env);
+        
+        // Register mock token contracts
+        let base_token_id = env.register_contract(None, MockTokenContract);
+        let base_token_client = MockTokenContractClient::new(&env, &base_token_id);
+        
+        let quote_token_id = env.register_contract(None, MockTokenContract);
+        let quote_token_client = MockTokenContractClient::new(&env, &quote_token_id);
 
-        (env, admin, base_token, quote_token, client)
+        (env, admin, base_token_client, quote_token_client, client)
     }
 
     #[test]
     fn test_initialize() {
         let (_env, admin, base_token, quote_token, client) = setup_env();
 
-        client.initialize(&admin, &base_token, &quote_token);
+        client.initialize(&admin, &base_token.address, &quote_token.address);
 
         let pair = client.token_pair();
-        assert_eq!(pair.base_token, base_token);
-        assert_eq!(pair.quote_token, quote_token);
+        assert_eq!(pair.base_token, base_token.address);
+        assert_eq!(pair.quote_token, quote_token.address);
     }
 
     #[test]
@@ -564,10 +642,19 @@ mod tests {
         let (env, admin, base_token, quote_token, client) = setup_env();
         let trader = Address::generate(&env);
 
-        client.initialize(&admin, &base_token, &quote_token);
+        // Initialize tokens
+        base_token.initialize(&admin);
+        quote_token.initialize(&admin);
 
-        // Create a private note for the order
+        client.initialize(&admin, &base_token.address, &quote_token.address);
+
+        // Create a private note for the order (Buy order uses quote token)
         let note = utils::create_private_note(&env, 1000i128).unwrap();
+        
+        // Deposit into quote token to generate proof
+        let leaf_index = quote_token.deposit(&trader, &1000i128, &note.commitment);
+        let proof = quote_token.generate_proof(&leaf_index).unwrap();
+
         let nullifier_hash = PrivacyPool::compute_nullifier_hash(&env, &note.nullifier_secret);
 
         let order_id = client.create_order(
@@ -577,6 +664,7 @@ mod tests {
             &note.commitment,
             &nullifier_hash,
             &(env.ledger().timestamp() + 3600),
+            &proof,
         );
 
         assert_eq!(order_id, 1);
@@ -597,10 +685,19 @@ mod tests {
         let (env, admin, base_token, quote_token, client) = setup_env();
         let trader = Address::generate(&env);
 
-        client.initialize(&admin, &base_token, &quote_token);
+        // Initialize tokens
+        base_token.initialize(&admin);
+        quote_token.initialize(&admin);
+
+        client.initialize(&admin, &base_token.address, &quote_token.address);
 
         // Create order
         let note = utils::create_private_note(&env, 1000i128).unwrap();
+        
+        // Deposit into quote token to generate proof
+        let leaf_index = quote_token.deposit(&trader, &1000i128, &note.commitment);
+        let proof = quote_token.generate_proof(&leaf_index).unwrap();
+
         let nullifier_hash = PrivacyPool::compute_nullifier_hash(&env, &note.nullifier_secret);
 
         let order_id = client.create_order(
@@ -610,6 +707,7 @@ mod tests {
             &note.commitment,
             &nullifier_hash,
             &(env.ledger().timestamp() + 3600),
+            &proof,
         );
 
         // Cancel order
@@ -704,7 +802,7 @@ mod tests {
     fn test_pause_unpause() {
         let (_env, admin, base_token, quote_token, client) = setup_env();
 
-        client.initialize(&admin, &base_token, &quote_token);
+        client.initialize(&admin, &base_token.address, &quote_token.address);
 
         assert!(!client.is_paused());
 
@@ -719,7 +817,7 @@ mod tests {
     fn test_verify_commitment() {
         let (env, admin, base_token, quote_token, client) = setup_env();
 
-        client.initialize(&admin, &base_token, &quote_token);
+        client.initialize(&admin, &base_token.address, &quote_token.address);
 
         let value = 1000i128;
         let note = utils::create_private_note(&env, value).unwrap();

@@ -30,7 +30,7 @@
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Symbol};
 use shared::privacy::{
     MerkleRoot, Nullifier, PedersenCommitment, PrivacyError, PrivacyPool, PrivacyPoolConfig,
-    PrivacyPoolDataKey, RangeProof,
+    PrivacyPoolDataKey, RangeProof, MerkleProof,
 };
 
 #[cfg(test)]
@@ -518,6 +518,20 @@ impl PrivateTokenContract {
         PrivacyPool::get_root(env)
     }
 
+    /// Verify a state proof against the current contract state
+    pub fn verify_state(env: Env, proof: MerkleProof) -> bool {
+        let current_root = PrivacyPool::get_root(&env);
+        if current_root.hash != proof.root {
+            return false;
+        }
+        PrivacyPool::verify_merkle_proof(&env, &proof)
+    }
+
+    /// Generate a Merkle proof for a given leaf index
+    pub fn generate_proof(env: Env, index: u32) -> Option<MerkleProof> {
+        PrivacyPool::generate_proof(&env, index)
+    }
+
     /// Check if nullifier has been spent
     pub fn is_spent(env: &Env, nullifier_hash: BytesN<32>) -> bool {
         PrivacyPool::is_nullifier_spent(env, &nullifier_hash)
@@ -771,5 +785,39 @@ mod tests {
         
         // Verify wrong value fails
         assert!(!client.verify_commitment(&note.commitment, &999, &note.blinding_factor));
+    }
+
+    #[test]
+    fn test_proof_generation_and_verification() {
+        let (env, admin, client) = setup_env();
+        let user = Address::generate(&env);
+
+        client.initialize(
+            &admin,
+            &Symbol::new(&env, "PrivateToken"),
+            &Symbol::new(&env, "PRIV"),
+            &18,
+        );
+
+        // Mint and deposit
+        client.mint(&admin, &user, &1000);
+        let note = utils::create_private_note(&env, 500i128).unwrap();
+        
+        let leaf_index = client.deposit(&user, &500, &note.commitment);
+        
+        // Generate proof
+        let proof = client.generate_proof(&leaf_index).unwrap();
+        
+        // Verify proof against current state
+        assert!(client.verify_state(&proof));
+        
+        // Verify proof fails if root changes (e.g. new deposit)
+        let note2 = utils::create_private_note(&env, 100i128).unwrap();
+        client.deposit(&user, &100, &note2.commitment);
+        
+        // The old proof's root should no longer match the current root
+        // But the Merkle path might still be valid for the old root.
+        // verify_state checks against CURRENT root.
+        assert!(!client.verify_state(&proof));
     }
 }

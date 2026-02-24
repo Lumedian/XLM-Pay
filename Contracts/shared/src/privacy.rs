@@ -81,6 +81,20 @@ pub struct MerkleNode {
     pub index: u32,
 }
 
+/// Merkle proof for inclusion verification
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MerkleProof {
+    /// The root hash this proof is for
+    pub root: BytesN<32>,
+    /// Sibling hashes along the path from leaf to root
+    pub path: soroban_sdk::Vec<BytesN<32>>,
+    /// Index of the leaf in the tree
+    pub index: u32,
+    /// The leaf hash being proven
+    pub leaf: BytesN<32>,
+}
+
 /// Merkle tree root - stored on-chain
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -213,6 +227,58 @@ impl PrivacyPool {
         commitment == &computed
     }
 
+    /// Compute parent node hash from left and right children
+    pub fn compute_node_hash(
+        env: &Env,
+        left: &BytesN<32>,
+        right: &BytesN<32>,
+    ) -> BytesN<32> {
+        let mut bytes = soroban_sdk::Bytes::new(env);
+        // Add left hash
+        for i in 0..32u32 {
+            bytes.push_back(left.get(i).unwrap_or(0));
+        }
+        // Add right hash
+        for i in 0..32u32 {
+            bytes.push_back(right.get(i).unwrap_or(0));
+        }
+        env.crypto().sha256(&bytes)
+    }
+
+    /// Verify a Merkle inclusion proof
+    pub fn verify_merkle_proof(
+        env: &Env,
+        proof: &MerkleProof,
+    ) -> bool {
+        // Path length check
+        if proof.path.len() != MERKLE_TREE_DEPTH {
+            return false;
+        }
+
+        let mut current_hash = proof.leaf.clone();
+        let mut current_index = proof.index;
+
+        for i in 0..MERKLE_TREE_DEPTH {
+            let sibling = proof.path.get(i).unwrap();
+            
+            // Determine if current node is left or right child based on index bit
+            // If bit is 0, current is left. If bit is 1, current is right.
+            let is_right_child = (current_index & 1) == 1;
+            
+            if is_right_child {
+                current_hash = Self::compute_node_hash(env, &sibling, &current_hash);
+            } else {
+                current_hash = Self::compute_node_hash(env, &current_hash, &sibling);
+            }
+            
+            // Move up to parent index
+            current_index >>= 1;
+        }
+
+        // Check if computed root matches proof root
+        current_hash == proof.root
+    }
+
     /// Deposit tokens into the privacy pool
     pub fn deposit(
         env: &Env,
@@ -287,6 +353,9 @@ impl PrivacyPool {
 
     /// Update Merkle tree with new leaf
     fn update_merkle_tree(env: &Env, leaf_index: u32, commitment: &BytesN<32>) {
+        let mut current_hash = commitment.clone();
+        let mut current_index = leaf_index;
+
         // Store leaf node
         env.storage().persistent().set(
             &PrivacyPoolDataKey::Node(0, leaf_index),
@@ -297,14 +366,83 @@ impl PrivacyPool {
             },
         );
 
-        // In a full implementation, update all parent nodes up to root
-        // For simplicity, we just update the root with a placeholder
+        for level in 0..MERKLE_TREE_DEPTH {
+            let is_right_child = (current_index & 1) == 1;
+            let sibling_index = if is_right_child {
+                current_index - 1
+            } else {
+                current_index + 1
+            };
+
+            let sibling_hash = Self::get_node_hash(env, level, sibling_index);
+            
+            if is_right_child {
+                current_hash = Self::compute_node_hash(env, &sibling_hash, &current_hash);
+            } else {
+                current_hash = Self::compute_node_hash(env, &current_hash, &sibling_hash);
+            }
+            
+            current_index >>= 1;
+            
+            // Store parent node
+            env.storage().persistent().set(
+                &PrivacyPoolDataKey::Node(level + 1, current_index),
+                &MerkleNode {
+                    hash: current_hash.clone(),
+                    level: level + 1,
+                    index: current_index,
+                },
+            );
+        }
+
+        // Update root
         let root = MerkleRoot {
-            hash: commitment.clone(), // Simplified - should compute actual root
+            hash: current_hash,
             timestamp: env.ledger().timestamp(),
             leaf_count: leaf_index + 1,
         };
         env.storage().instance().set(&PrivacyPoolDataKey::Root, &root);
+    }
+
+    /// Get node hash at specific level and index
+    fn get_node_hash(env: &Env, level: u32, index: u32) -> BytesN<32> {
+        env.storage()
+            .persistent()
+            .get::<PrivacyPoolDataKey, MerkleNode>(&PrivacyPoolDataKey::Node(level, index))
+            .map(|node| node.hash)
+            .unwrap_or(BytesN::from_array(env, &[0u8; 32])) // Default zero hash
+    }
+    
+    /// Generate a Merkle proof for a given leaf index
+    pub fn generate_proof(env: &Env, index: u32) -> Option<MerkleProof> {
+        let leaf_node = env.storage().persistent().get::<PrivacyPoolDataKey, MerkleNode>(&PrivacyPoolDataKey::Node(0, index))?;
+        let leaf = leaf_node.hash;
+        
+        let mut path = soroban_sdk::Vec::new(env);
+        let mut current_index = index;
+        
+        for level in 0..MERKLE_TREE_DEPTH {
+            let is_right_child = (current_index & 1) == 1;
+            let sibling_index = if is_right_child {
+                current_index - 1
+            } else {
+                current_index + 1
+            };
+            
+            let sibling_hash = Self::get_node_hash(env, level, sibling_index);
+            path.push_back(sibling_hash);
+            
+            current_index >>= 1;
+        }
+        
+        let root = Self::get_root(env).hash;
+        
+        Some(MerkleProof {
+            root,
+            path,
+            index,
+            leaf,
+        })
     }
 
     /// Get the current Merkle root

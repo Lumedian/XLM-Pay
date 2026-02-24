@@ -838,6 +838,7 @@ dependencies = [
 name = "privacy-trading"
 version = "0.1.0"
 dependencies = [
+ "privacy-token",
  "shared",
  "soroban-sdk",
 ]
