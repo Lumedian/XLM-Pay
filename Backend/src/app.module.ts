@@ -28,6 +28,10 @@ import { AuditModule } from './audit/audit.module';
 import { AuditLog } from './audit/audit.entity';
 import { VoiceJob } from './voice/entities/voice-job.entity';
 import { ThrottleModule } from './throttle/throttle.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { Notification } from './modules/notifications/entities/notification.entity';
+import { NotificationPreference } from './modules/notifications/entities/notification-preference.entity';
+import { NotificationTemplate } from './modules/notifications/entities/notification-template.entity';
 
 
 @Module({
@@ -57,6 +61,9 @@ import { ThrottleModule } from './throttle/throttle.module';
           ApiToken,
           AuditLog,
           VoiceJob,
+          Notification,
+          NotificationPreference,
+          NotificationTemplate,
         ],
         synchronize: configService.get('NODE_ENV') === 'development',
         logging: configService.get('NODE_ENV') === 'development',
@@ -72,6 +79,7 @@ import { ThrottleModule } from './throttle/throttle.module';
     MarketDataModule,
     AuditModule,
     ThrottleModule,
+    NotificationsModule,
   ],
 
   controllers: [AppController],
@@ -89,4 +97,4 @@ import { ThrottleModule } from './throttle/throttle.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }
