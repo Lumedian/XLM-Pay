@@ -81,11 +81,13 @@ export class QuotaService {
     const sessionKey = this.getSessionKey(sessionId);
     const rpmKey = this.getRpmKey(userId, now);
 
-    const [monthlyUsage, sessionUsage, rpmUsage] = await Promise.all([
-      this.redisService.client.get(monthKey).then(v => parseInt(v || '0', 10)),
-      this.redisService.client.get(sessionKey).then(v => parseInt(v || '0', 10)),
-      this.redisService.client.get(rpmKey).then(v => parseInt(v || '0', 10)),
-    ]);
+    const monthlyValue = await this.redisService.client.get(monthKey);
+    const sessionValue = await this.redisService.client.get(sessionKey);
+    const rpmValue = await this.redisService.client.get(rpmKey);
+    
+    const monthlyUsage = parseInt(monthlyValue as string ?? '0', 10);
+    const sessionUsage = parseInt(sessionValue as string ?? '0', 10);
+    const rpmUsage = parseInt(rpmValue as string ?? '0', 10);
 
     return {
       monthlyUsage,

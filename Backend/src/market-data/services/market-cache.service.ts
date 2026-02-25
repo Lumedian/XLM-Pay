@@ -1,3 +1,68 @@
+  /**
+   * Cache-aside pattern: fetch from cache or load and cache
+   */
+  async getOrLoad<T>(
+    key: string,
+    namespace: CacheNamespace,
+    loader: () => Promise<T>,
+    customTtl?: number,
+  ): Promise<T> {
+    const cached = await this.get<T>(key, namespace);
+    if (cached !== null) return cached;
+    const value = await loader();
+    await this.set<T>(key, value, namespace, customTtl);
+    return value;
+  }
+
+  /**
+   * Write-through pattern: update cache immediately on write
+   */
+  async writeThrough<T>(
+    key: string,
+    value: T,
+    namespace: CacheNamespace,
+    persistFn: (v: T) => Promise<void>,
+    customTtl?: number,
+  ): Promise<void> {
+    await persistFn(value);
+    await this.set<T>(key, value, namespace, customTtl);
+  }
+
+  /**
+   * Cache warming for critical namespaces
+   */
+  async warmCache(
+    namespace: CacheNamespace,
+    keys: string[],
+    loader: (key: string) => Promise<any>,
+    customTtl?: number,
+  ): Promise<void> {
+    for (const key of keys) {
+      const exists = await this.has(key, namespace);
+      if (!exists) {
+        const value = await loader(key);
+        await this.set(key, value, namespace, customTtl);
+        this.logger.log(`Cache warmed: ${namespace}:${key}`);
+      }
+    }
+  }
+
+  /**
+   * Smart invalidation: event-driven, pattern-based
+   */
+  async smartInvalidate(
+    event: { namespace: CacheNamespace; keys?: string[]; pattern?: string; reason?: string },
+  ): Promise<number> {
+    if (event.keys && event.keys.length > 0) {
+      return await this.invalidate(event.keys, event.namespace);
+    }
+    if (event.pattern) {
+      return await this.invalidateByPattern(event.pattern, event.namespace);
+    }
+    // Fallback: invalidate entire namespace
+    return await this.invalidateNamespace(event.namespace);
+  }
+  // ...existing code...
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '../../redis/redis.service';
 import { CacheMetrics, CacheNamespace, CACHE_TTL_CONFIG } from '../types/cache-config.types';
