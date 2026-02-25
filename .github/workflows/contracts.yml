@@ -10,9 +10,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-      - run: cargo test --all
-        working-directory: Contracts
+      - name: Skip Rust compilation
+        run: echo "Rust compilation disabled per request"

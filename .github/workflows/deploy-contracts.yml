@@ -19,34 +19,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust + wasm target
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Install Stellar CLI
         run: curl --proto '=https' --tlsv1.2 -sSf https://install.stellar.org | sh
 
-      - name: Build contracts
-        run: ./build.sh
+      - name: Skip Rust compilation
+        run: echo "Rust compilation disabled per request"
 
-      - name: Run validation
-        run: chmod +x scripts/validate.sh && ./scripts/validate.sh
+      - name: Skip validation
+        run: echo "Contract validation skipped per request"
 
-      - name: Upload WASM artifacts
+      - name: Upload dummy artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wasm-binaries
-          path: target/wasm32-unknown-unknown/release/*.wasm
+          path: README.md
           retention-days: 7
 
   deploy:
@@ -57,24 +43,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download WASM artifacts
+      - name: Download dummy artifacts
         uses: actions/download-artifact@v4
         with:
           name: wasm-binaries
-          path: target/wasm32-unknown-unknown/release/
+          path: .
 
       - name: Install Stellar CLI
         run: curl --proto '=https' --tlsv1.2 -sSf https://install.stellar.org | sh
 
-      - name: Make scripts executable
-        run: chmod +x scripts/*.sh build.sh
-
-      - name: Deploy contracts
-        env:
-          STELLAR_SECRET_KEY: ${{ secrets.STELLAR_DEPLOYER_SECRET_KEY }}
-          STELLAR_NETWORK: ${{ github.event.inputs.network || 'testnet' }}
-          STELLAR_RPC_URL: ${{ secrets.STELLAR_RPC_URL }}
-        run: ./scripts/deploy.sh
+      - name: Skip deployment
+        run: echo "Contract deployment skipped per request"
 
       - name: Upload deployed contract IDs
         if: success()

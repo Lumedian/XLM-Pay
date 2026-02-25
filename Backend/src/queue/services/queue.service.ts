@@ -168,8 +168,15 @@ export class QueueService {
       throw new Error(`Job ${jobId} not found in queue ${queueName}`);
     }
 
-    // Create a new job with same data
-    const newJob = await queue.add(job.name, job.data, {
+    // Sanitize data when requeuing certain jobs to avoid test/diagnostic fields
+    let dataToUse: any = job.data;
+    if (job.name === 'deploy-contract') {
+      const { contractName, contractCode, network } = job.data || {};
+      dataToUse = { contractName, contractCode, network };
+    }
+
+    // Create a new job with sanitized data
+    const newJob = await queue.add(job.name, dataToUse, {
       removeOnComplete: false,
       removeOnFail: false,
       attempts: job.opts.attempts || 3,
