@@ -1,5 +1,6 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, symbol_short};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, symbol_short, IntoVal};
+use shared::state_verification::{verify_with_contract, trust_add, is_trusted};
 use shared::fees::{FeeManager, FeeError};
 use shared::governance::{
     GovernanceManager, GovernanceRole, UpgradeProposal,
@@ -113,6 +114,19 @@ impl UpgradeableTradingContract {
         env.storage().persistent().set(&version_key, &CONTRACT_VERSION);
 
         Ok(())
+    }
+
+    pub fn trust_contract(env: Env, contract: Address) {
+        trust_add(&env, &contract);
+    }
+
+    pub fn verify_external_balance(env: Env, token: Address, holder: Address, expected: i128) -> bool {
+        if !is_trusted(&env, &token) {
+            return false;
+        }
+        let key = Symbol::new(&env, "balance");
+        let subject = (holder, expected).into_val(&env);
+        verify_with_contract(&env, &token, &key, &subject)
     }
 
     /// Execute a trade with fee collection
