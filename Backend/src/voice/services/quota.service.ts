@@ -32,7 +32,7 @@ export class QuotaService {
   private readonly SESSION_QUOTA_PREFIX = 'quota:session:';
   private readonly RPM_PREFIX = 'quota:rpm:';
 
-  constructor(private readonly redisService: RedisService) {}
+  constructor(private readonly redisService: RedisService) { }
 
   /**
    * Enforces quota checks before allowing an LLM request
@@ -63,7 +63,7 @@ export class QuotaService {
         throw error;
       }
       this.logger.error(`Unexpected error in quota enforcement: ${error.message}`, error.stack);
-      throw new HttpException('Quota check failed', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(`Quota check failed: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

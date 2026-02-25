@@ -275,7 +275,7 @@ describe('QueueService', () => {
 
   describe('purgeQueue', () => {
     it('should purge failed jobs from queue', async () => {
-      mockQueue.clean.mockResolvedValue(10);
+      mockQueue.clean.mockResolvedValue(new Array(10).fill({}));
 
       const result = await service.purgeQueue('deploy-contract');
 

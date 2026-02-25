@@ -1,13 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '../../redis/redis.service';
 import { CacheMetrics, CacheNamespace, CACHE_TTL_CONFIG } from '../types/cache-config.types';
-import * as crypto from 'crypto';
+import crypto from 'crypto';
 
 @Injectable()
 export class MarketCacheService {
   private readonly logger = new Logger(MarketCacheService.name);
 
-  constructor(private readonly redisService: RedisService) {}
+  constructor(private readonly redisService: RedisService) { }
 
   /**
    * Get cached data by key and namespace

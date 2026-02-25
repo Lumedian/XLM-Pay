@@ -217,7 +217,7 @@ export class QueueService {
   async purgeQueue(queueName: string): Promise<number> {
     const queue = this.getQueueByName(queueName);
     const jobs = await queue.clean(0, 'failed');
-    const count = jobs.length;
+    const count = jobs ? jobs.length : 0;
     this.logger.log(`Purged ${count} jobs from queue ${queueName}`);
     return count;
   }

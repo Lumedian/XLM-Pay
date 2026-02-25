@@ -1,6 +1,6 @@
 import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
-import { Job } from 'bull';
+import type { Job } from 'bull';
 import { NotificationChannel } from './entities/notification-preference.entity';
 import { EmailProvider } from './providers/email.provider';
 import { PushProvider } from './providers/push.provider';
@@ -29,8 +29,8 @@ export class NotificationsProcessor {
                         id: notificationId,
                         type,
                         data,
-                        title: options.title,
-                        message: options.message,
+                        title: options?.title || `New ${type} Notification`,
+                        message: options?.message || JSON.stringify(data),
                     });
                     break;
 
