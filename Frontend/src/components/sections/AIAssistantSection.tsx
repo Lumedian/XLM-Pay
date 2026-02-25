@@ -1,91 +1,44 @@
 'use client';
-import { motion } from 'framer-motion';
-import { Container } from '@/components/ui/Container';
-import { AIAssistantChat } from './AIAssistantChat';
-
-const capabilities = [
-  {
-    icon: '🎓',
-    title: 'Learn & Grow',
-    description: 'Guided lessons from basics to advanced trading',
-  },
-  {
-    icon: '💬',
-    title: 'Ask Anything',
-    description: '24/7 AI support for all your crypto questions',
-  },
-  {
-    icon: '📊',
-    title: 'Market Insights',
-    description: 'Real-time analysis and trading strategies',
-  },
-  {
-    icon: '🔗',
-    title: 'Stellar Native',
-    description: 'Deep integration with Stellar ecosystem',
-  },
-];
+import Image from 'next/image';
 
 export function AIAssistantSection() {
   return (
-    <section className="bg-black py-20 text-white sm:py-24 lg:py-32">
-      <Container>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="mb-16 text-center"
-        >
-          <h2 className="mb-4 text-4xl font-bold sm:text-5xl lg:text-6xl">
-            Meet Your AI <span className="text-brand-blue">Crypto Mentor</span>
-          </h2>
-          <p className="mx-auto max-w-3xl text-lg text-white/80 sm:text-xl">
-            Stellara AI combines advanced artificial intelligence with deep crypto knowledge
-            to guide your learning journey every step of the way.
+    <section className="bg-black min-h-screen flex items-center justify-center px-6 py-20">
+      <div className="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-3 gap-12 lg:gap-20 items-center">
+        
+        {/* Left Column */}
+        <div className="space-y-12 lg:space-y-16 text-center lg:text-right">
+          <p className="text-[#DDDDDD] text-base md:text-lg leading-relaxed font-light">
+            Learn crypto the smart way with guided lessons, quizzes, and real explanations powered by AI — from beginner basics to advanced trading concepts.
           </p>
-        </motion.div>
-
-        <div className="grid gap-12 lg:grid-cols-2 lg:gap-16">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            <AIAssistantChat />
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-col justify-center"
-          >
-            <div className="space-y-8">
-              {capabilities.map((capability, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, y: 10 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.4, delay: 0.4 + idx * 0.1 }}
-                  className="flex gap-4"
-                >
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/10 text-2xl">
-                    {capability.icon}
-                  </div>
-                  <div>
-                    <h3 className="mb-1 text-xl font-semibold">{capability.title}</h3>
-                    <p className="text-white/70">{capability.description}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
+          <p className="text-[#DDDDDD] text-base md:text-lg leading-relaxed font-light">
+            Join a social crypto community to share ideas, discuss trends, and connect with traders, builders, and educators in real time.
+          </p>
         </div>
-      </Container>
+
+        {/* Center - AI Head */}
+        <div className="flex justify-center">
+          <div className="relative w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96">
+            <Image
+              src="/ai-head.png"
+              alt="Stellara AI"
+              fill
+              className="object-contain"
+              priority
+            />
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-12 lg:space-y-16 text-center lg:text-left">
+          <p className="text-[#DDDDDD] text-base md:text-lg leading-relaxed font-light">
+            Chat or speak with Stellara AI to understand markets, strategies, and Stellar tools — available 24/7 to guide your learning journey.
+          </p>
+          <p className="text-[#DDDDDD] text-base md:text-lg leading-relaxed font-light">
+            Connect your wallet, explore Stellar assets, track your portfolio, and move from learning to real on-chain trading seamlessly.
+          </p>
+        </div>
+      </div>
     </section>
   );
 }

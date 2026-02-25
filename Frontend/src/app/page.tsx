@@ -7,7 +7,6 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Navbar from '@/components/Navigation/Navbar';
 import { HeroSection } from '@/components/sections/HeroSection';
-import { AiAssistant } from '@/components/section/ai-assistant';
 import { AIAssistantSection } from '@/components/sections/AIAssistantSection';
 
 export default function Home() {
@@ -68,10 +67,7 @@ export default function Home() {
       {/* Hero Section */}
       <HeroSection />
 
-      {/* AI Assistant Info Section */}
-      <AiAssistant />
-
-      {/* AI Assistant Interactive Section */}
+      {/* AI Assistant Section */}
       <AIAssistantSection />
 
       {/* Features Section */}
