@@ -1,6 +1,6 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, symbol_short};
 use shared::events::{EventEmitter, RewardAddedEvent, RewardClaimedEvent};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
 
 /// Social reward record
 #[contracttype]
@@ -63,11 +63,7 @@ pub struct SocialRewardsContract;
 #[contractimpl]
 impl SocialRewardsContract {
     /// Initialize the contract with admin and reward token
-    pub fn init(
-        env: Env,
-        admin: Address,
-        reward_token: Address,
-    ) -> Result<(), RewardError> {
+    pub fn init(env: Env, admin: Address, reward_token: Address) -> Result<(), RewardError> {
         // Check if already initialized
         let init_key = symbol_short!("init");
         if env.storage().persistent().has(&init_key) {
@@ -128,16 +124,16 @@ impl SocialRewardsContract {
 
         // Get next reward ID
         let stats_key = symbol_short!("stats");
-        let mut stats: RewardStats = env
-            .storage()
-            .persistent()
-            .get(&stats_key)
-            .unwrap_or(RewardStats {
-                total_rewards: 0,
-                total_amount: 0,
-                total_claimed: 0,
-                last_reward_id: 0,
-            });
+        let mut stats: RewardStats =
+            env.storage()
+                .persistent()
+                .get(&stats_key)
+                .unwrap_or(RewardStats {
+                    total_rewards: 0,
+                    total_amount: 0,
+                    total_claimed: 0,
+                    last_reward_id: 0,
+                });
 
         let reward_id = stats.last_reward_id + 1;
         let timestamp = env.ledger().timestamp();
@@ -181,28 +177,29 @@ impl SocialRewardsContract {
             .unwrap_or_else(|| soroban_sdk::Vec::new(&env));
 
         user_rewards.push_back(reward_id);
-        env.storage().persistent().set(&user_rewards_key, &user_rewards);
+        env.storage()
+            .persistent()
+            .set(&user_rewards_key, &user_rewards);
 
         // Emit reward added event
-        EventEmitter::reward_added(&env, RewardAddedEvent {
-            reward_id,
-            user,
-            amount,
-            reward_type,
-            reason,
-            granted_by: admin,
-            timestamp,
-        });
+        EventEmitter::reward_added(
+            &env,
+            RewardAddedEvent {
+                reward_id,
+                user,
+                amount,
+                reward_type,
+                reason,
+                granted_by: admin,
+                timestamp,
+            },
+        );
 
         Ok(reward_id)
     }
 
     /// Claim a reward
-    pub fn claim_reward(
-        env: Env,
-        reward_id: u64,
-        user: Address,
-    ) -> Result<i128, RewardError> {
+    pub fn claim_reward(env: Env, reward_id: u64, user: Address) -> Result<i128, RewardError> {
         user.require_auth();
 
         // Get reward
@@ -213,9 +210,7 @@ impl SocialRewardsContract {
             .get(&rewards_key)
             .ok_or(RewardError::RewardNotFound)?;
 
-        let mut reward = rewards
-            .get(reward_id)
-            .ok_or(RewardError::RewardNotFound)?;
+        let mut reward = rewards.get(reward_id).ok_or(RewardError::RewardNotFound)?;
 
         // Verify user owns the reward
         if reward.user != user {
@@ -252,34 +247,33 @@ impl SocialRewardsContract {
 
         // Update stats
         let stats_key = symbol_short!("stats");
-        let mut stats: RewardStats = env
-            .storage()
-            .persistent()
-            .get(&stats_key)
-            .unwrap_or(RewardStats {
-                total_rewards: 0,
-                total_amount: 0,
-                total_claimed: 0,
-                last_reward_id: 0,
-            });
+        let mut stats: RewardStats =
+            env.storage()
+                .persistent()
+                .get(&stats_key)
+                .unwrap_or(RewardStats {
+                    total_rewards: 0,
+                    total_amount: 0,
+                    total_claimed: 0,
+                    last_reward_id: 0,
+                });
 
         stats.total_claimed += reward.amount;
         env.storage().persistent().set(&stats_key, &stats);
 
         // Transfer tokens to user
-        token_client.transfer(
-            &env.current_contract_address(),
-            &user,
-            &reward.amount,
-        );
+        token_client.transfer(&env.current_contract_address(), &user, &reward.amount);
 
         // Emit reward claimed event
-        EventEmitter::reward_claimed(&env, RewardClaimedEvent {
-            reward_id,
-            user,
-            amount: reward.amount,
-            timestamp,
-        });
+        EventEmitter::reward_claimed(
+            &env,
+            RewardClaimedEvent {
+                reward_id,
+                user,
+                amount: reward.amount,
+                timestamp,
+            },
+        );
 
         Ok(reward.amount)
     }
@@ -293,9 +287,7 @@ impl SocialRewardsContract {
             .get(&rewards_key)
             .ok_or(RewardError::RewardNotFound)?;
 
-        rewards
-            .get(reward_id)
-            .ok_or(RewardError::RewardNotFound)
+        rewards.get(reward_id).ok_or(RewardError::RewardNotFound)
     }
 
     /// Get all reward IDs for a user

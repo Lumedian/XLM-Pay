@@ -3,7 +3,10 @@
 extern crate std;
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, testutils::Events, token, Address, Env, Symbol, TryIntoVal};
+use soroban_sdk::{
+    testutils::Address as _, testutils::Events, testutils::Ledger as _, token, Address, Env,
+    Symbol, TryIntoVal,
+};
 
 fn setup_env() -> (Env, Address, Address, Address) {
     let env = Env::default();
@@ -93,13 +96,27 @@ fn test_add_reward_invalid_amount_fails() {
 
     // Negative amount - call contract directly to get actual error
     let result = env.as_contract(&contract_id, || {
-        SocialRewardsContract::add_reward(env.clone(), admin.clone(), user.clone(), -1, reward_type.clone(), reason.clone())
+        SocialRewardsContract::add_reward(
+            env.clone(),
+            admin.clone(),
+            user.clone(),
+            -1,
+            reward_type.clone(),
+            reason.clone(),
+        )
     });
     assert_eq!(result, Err(RewardError::InvalidAmount));
 
     // Zero amount
     let result = env.as_contract(&contract_id, || {
-        SocialRewardsContract::add_reward(env.clone(), admin.clone(), user.clone(), 0, reward_type.clone(), reason.clone())
+        SocialRewardsContract::add_reward(
+            env.clone(),
+            admin.clone(),
+            user.clone(),
+            0,
+            reward_type.clone(),
+            reason.clone(),
+        )
     });
     assert_eq!(result, Err(RewardError::InvalidAmount));
 }
@@ -368,15 +385,22 @@ fn test_multiple_rewards_emit_multiple_events() {
     let events = env.events().all();
 
     // Count reward events
-    let reward_event_count = events.iter().filter(|(_, topics, _)| {
-        if let Some(first_topic) = topics.first() {
-            let topic_str: Result<Symbol, _> = first_topic.clone().try_into_val(&env);
-            if let Ok(sym) = topic_str {
-                return sym == symbol_short!("reward");
+    let reward_event_count = events
+        .iter()
+        .filter(|(_, topics, _)| {
+            if let Some(first_topic) = topics.first() {
+                let topic_str: Result<Symbol, _> = first_topic.clone().try_into_val(&env);
+                if let Ok(sym) = topic_str {
+                    return sym == symbol_short!("reward");
+                }
             }
-        }
-        false
-    }).count();
+            false
+        })
+        .count();
 
-    assert_eq!(reward_event_count, 3, "Expected 3 reward events, got {}", reward_event_count);
+    assert_eq!(
+        reward_event_count, 3,
+        "Expected 3 reward events, got {}",
+        reward_event_count
+    );
 }

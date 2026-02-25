@@ -1,12 +1,10 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, symbol_short};
-use shared::fees::{FeeManager, FeeError};
-use shared::governance::{
-    GovernanceManager, GovernanceRole, UpgradeProposal,
-};
 use shared::events::{
-    EventEmitter, TradeExecutedEvent, ContractPausedEvent, ContractUnpausedEvent, FeeCollectedEvent,
+    ContractPausedEvent, ContractUnpausedEvent, EventEmitter, FeeCollectedEvent, TradeExecutedEvent,
 };
+use shared::fees::{FeeError, FeeManager};
+use shared::governance::{GovernanceManager, GovernanceRole, UpgradeProposal};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
 
 /// Version of this contract implementation
 const CONTRACT_VERSION: u32 = 1;
@@ -110,7 +108,9 @@ impl UpgradeableTradingContract {
 
         // Store contract version
         let version_key = symbol_short!("ver");
-        env.storage().persistent().set(&version_key, &CONTRACT_VERSION);
+        env.storage()
+            .persistent()
+            .set(&version_key, &CONTRACT_VERSION);
 
         Ok(())
     }
@@ -131,11 +131,7 @@ impl UpgradeableTradingContract {
 
         // Verify not paused
         let paused_key = symbol_short!("pause");
-        let is_paused: bool = env
-            .storage()
-            .persistent()
-            .get(&paused_key)
-            .unwrap_or(false);
+        let is_paused: bool = env.storage().persistent().get(&paused_key).unwrap_or(false);
 
         if is_paused {
             panic!("PAUSED");
@@ -146,26 +142,29 @@ impl UpgradeableTradingContract {
 
         // Emit fee collected event
         if fee_amount > 0 {
-            EventEmitter::fee_collected(&env, FeeCollectedEvent {
-                payer: trader.clone(),
-                recipient: fee_recipient,
-                amount: fee_amount,
-                token: fee_token.clone(),
-                timestamp: env.ledger().timestamp(),
-            });
+            EventEmitter::fee_collected(
+                &env,
+                FeeCollectedEvent {
+                    payer: trader.clone(),
+                    recipient: fee_recipient,
+                    amount: fee_amount,
+                    token: fee_token.clone(),
+                    timestamp: env.ledger().timestamp(),
+                },
+            );
         }
 
         // Create trade record
         let stats_key = symbol_short!("stats");
-        let mut stats: TradeStats = env
-            .storage()
-            .persistent()
-            .get(&stats_key)
-            .unwrap_or(TradeStats {
-                total_trades: 0,
-                total_volume: 0,
-                last_trade_id: 0,
-            });
+        let mut stats: TradeStats =
+            env.storage()
+                .persistent()
+                .get(&stats_key)
+                .unwrap_or(TradeStats {
+                    total_trades: 0,
+                    total_volume: 0,
+                    last_trade_id: 0,
+                });
 
         let trade_id = stats.last_trade_id + 1;
         let timestamp = env.ledger().timestamp();
@@ -199,17 +198,20 @@ impl UpgradeableTradingContract {
         env.storage().persistent().set(&stats_key, &stats);
 
         // Emit trade executed event
-        EventEmitter::trade_executed(&env, TradeExecutedEvent {
-            trade_id,
-            trader,
-            pair,
-            amount,
-            price,
-            is_buy,
-            fee_amount,
-            fee_token,
-            timestamp,
-        });
+        EventEmitter::trade_executed(
+            &env,
+            TradeExecutedEvent {
+                trade_id,
+                trader,
+                pair,
+                amount,
+                price,
+                is_buy,
+                fee_amount,
+                fee_token,
+                timestamp,
+            },
+        );
 
         Ok(trade_id)
     }
@@ -217,10 +219,7 @@ impl UpgradeableTradingContract {
     /// Get current contract version
     pub fn get_version(env: Env) -> u32 {
         let version_key = symbol_short!("ver");
-        env.storage()
-            .persistent()
-            .get(&version_key)
-            .unwrap_or(0)
+        env.storage().persistent().get(&version_key).unwrap_or(0)
     }
 
     /// Get trading statistics
@@ -248,9 +247,7 @@ impl UpgradeableTradingContract {
             .get(&roles_key)
             .ok_or(TradeError::Unauthorized)?;
 
-        let role = roles
-            .get(admin.clone())
-            .ok_or(TradeError::Unauthorized)?;
+        let role = roles.get(admin.clone()).ok_or(TradeError::Unauthorized)?;
 
         if role != GovernanceRole::Admin {
             return Err(TradeError::Unauthorized);
@@ -260,10 +257,13 @@ impl UpgradeableTradingContract {
         env.storage().persistent().set(&paused_key, &true);
 
         // Emit contract paused event
-        EventEmitter::contract_paused(&env, ContractPausedEvent {
-            paused_by: admin,
-            timestamp: env.ledger().timestamp(),
-        });
+        EventEmitter::contract_paused(
+            &env,
+            ContractPausedEvent {
+                paused_by: admin,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
 
         Ok(())
     }
@@ -279,9 +279,7 @@ impl UpgradeableTradingContract {
             .get(&roles_key)
             .ok_or(TradeError::Unauthorized)?;
 
-        let role = roles
-            .get(admin.clone())
-            .ok_or(TradeError::Unauthorized)?;
+        let role = roles.get(admin.clone()).ok_or(TradeError::Unauthorized)?;
 
         if role != GovernanceRole::Admin {
             return Err(TradeError::Unauthorized);
@@ -291,10 +289,13 @@ impl UpgradeableTradingContract {
         env.storage().persistent().set(&paused_key, &false);
 
         // Emit contract unpaused event
-        EventEmitter::contract_unpaused(&env, ContractUnpausedEvent {
-            unpaused_by: admin,
-            timestamp: env.ledger().timestamp(),
-        });
+        EventEmitter::contract_unpaused(
+            &env,
+            ContractUnpausedEvent {
+                unpaused_by: admin,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
 
         Ok(())
     }
@@ -354,16 +355,11 @@ impl UpgradeableTradingContract {
 
     /// Get upgrade proposal details
     pub fn get_upgrade_proposal(env: Env, proposal_id: u64) -> Result<UpgradeProposal, TradeError> {
-        GovernanceManager::get_proposal(&env, proposal_id)
-            .map_err(|_| TradeError::Unauthorized)
+        GovernanceManager::get_proposal(&env, proposal_id).map_err(|_| TradeError::Unauthorized)
     }
 
     /// Reject an upgrade proposal
-    pub fn reject_upgrade(
-        env: Env,
-        proposal_id: u64,
-        rejector: Address,
-    ) -> Result<(), TradeError> {
+    pub fn reject_upgrade(env: Env, proposal_id: u64, rejector: Address) -> Result<(), TradeError> {
         rejector.require_auth();
 
         GovernanceManager::reject_proposal(&env, proposal_id, rejector)
@@ -371,11 +367,7 @@ impl UpgradeableTradingContract {
     }
 
     /// Cancel an upgrade proposal (admin only)
-    pub fn cancel_upgrade(
-        env: Env,
-        proposal_id: u64,
-        admin: Address,
-    ) -> Result<(), TradeError> {
+    pub fn cancel_upgrade(env: Env, proposal_id: u64, admin: Address) -> Result<(), TradeError> {
         admin.require_auth();
 
         GovernanceManager::cancel_proposal(&env, proposal_id, admin)

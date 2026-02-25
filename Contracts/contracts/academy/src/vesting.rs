@@ -1,4 +1,4 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, symbol_short, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec};
 
 /// Vesting schedule for an academy reward
 #[contracttype]
@@ -7,11 +7,11 @@ pub struct VestingSchedule {
     pub beneficiary: Address,
     pub amount: i128,
     pub start_time: u64,
-    pub cliff: u64,                    // Time (in seconds) before any tokens unlock
-    pub duration: u64,                 // Total vesting duration (in seconds)
+    pub cliff: u64,    // Time (in seconds) before any tokens unlock
+    pub duration: u64, // Total vesting duration (in seconds)
     pub claimed: bool,
     pub revoked: bool,
-    pub revoke_time: u64,              // When it was revoked (0 if not revoked)
+    pub revoke_time: u64, // When it was revoked (0 if not revoked)
 }
 
 /// Vesting grant event for off-chain indexing
@@ -155,11 +155,7 @@ impl AcademyVestingContract {
 
         // Get next grant ID
         let counter_key = symbol_short!("cnt");
-        let grant_id: u64 = env
-            .storage()
-            .persistent()
-            .get(&counter_key)
-            .unwrap_or(0u64);
+        let grant_id: u64 = env.storage().persistent().get(&counter_key).unwrap_or(0u64);
 
         let next_id = grant_id + 1;
 
@@ -187,9 +183,7 @@ impl AcademyVestingContract {
         env.storage().persistent().set(&schedules_key, &schedules);
 
         // Update counter
-        env.storage()
-            .persistent()
-            .set(&counter_key, &next_id);
+        env.storage().persistent().set(&counter_key, &next_id);
 
         // Emit grant event
         let grant_event = GrantEvent {
@@ -220,9 +214,7 @@ impl AcademyVestingContract {
             .get(&schedules_key)
             .ok_or(VestingError::GrantNotFound)?;
 
-        let mut schedule = schedules
-            .get(grant_id)
-            .ok_or(VestingError::GrantNotFound)?;
+        let mut schedule = schedules.get(grant_id).ok_or(VestingError::GrantNotFound)?;
 
         // Verify beneficiary matches
         if schedule.beneficiary != beneficiary {
@@ -241,10 +233,7 @@ impl AcademyVestingContract {
 
         // Calculate vested amount
         let current_time = env.ledger().timestamp();
-        let vested_amount = Self::calculate_vested_amount(
-            &schedule,
-            current_time,
-        )?;
+        let vested_amount = Self::calculate_vested_amount(&schedule, current_time)?;
 
         if vested_amount == 0 {
             return Err(VestingError::NotVested);
@@ -319,9 +308,7 @@ impl AcademyVestingContract {
             .get(&schedules_key)
             .ok_or(VestingError::GrantNotFound)?;
 
-        let mut schedule = schedules
-            .get(grant_id)
-            .ok_or(VestingError::GrantNotFound)?;
+        let mut schedule = schedules.get(grant_id).ok_or(VestingError::GrantNotFound)?;
 
         // Cannot revoke already claimed
         if schedule.claimed {
@@ -358,7 +345,8 @@ impl AcademyVestingContract {
             revoked_by: admin,
         };
 
-        env.events().publish((symbol_short!("revoke"),), revoke_event);
+        env.events()
+            .publish((symbol_short!("revoke"),), revoke_event);
 
         Ok(())
     }
@@ -372,9 +360,7 @@ impl AcademyVestingContract {
             .get(&schedules_key)
             .ok_or(VestingError::GrantNotFound)?;
 
-        schedules
-            .get(grant_id)
-            .ok_or(VestingError::GrantNotFound)
+        schedules.get(grant_id).ok_or(VestingError::GrantNotFound)
     }
 
     /// Calculate vested amount at current time
@@ -386,9 +372,7 @@ impl AcademyVestingContract {
             .get(&schedules_key)
             .ok_or(VestingError::GrantNotFound)?;
 
-        let schedule = schedules
-            .get(grant_id)
-            .ok_or(VestingError::GrantNotFound)?;
+        let schedule = schedules.get(grant_id).ok_or(VestingError::GrantNotFound)?;
 
         let current_time = env.ledger().timestamp();
         Self::calculate_vested_amount(&schedule, current_time)
@@ -423,8 +407,8 @@ impl AcademyVestingContract {
         }
 
         // Use fixed-point arithmetic to avoid floating point
-        let vested_amount = (schedule.amount as u128 * vested_duration as u128)
-            / remaining_duration as u128;
+        let vested_amount =
+            (schedule.amount as u128 * vested_duration as u128) / remaining_duration as u128;
 
         Ok(vested_amount as i128)
     }

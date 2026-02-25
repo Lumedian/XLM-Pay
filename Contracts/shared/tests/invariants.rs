@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use proptest::prelude::*;
-use soroban_sdk::{testutils::Address as _, Env, Address, IntoVal};
+use soroban_sdk::{testutils::Address as _, Address, Env, IntoVal};
 
 use token::{TokenContract, TokenContractClient};
 

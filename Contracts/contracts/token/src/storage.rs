@@ -78,7 +78,9 @@ pub fn balance_of(env: &Env, id: &Address) -> i128 {
 
 pub fn set_balance(env: &Env, id: &Address, amount: &i128) {
     if *amount == 0 {
-        env.storage().persistent().remove(&DataKey::Balance(id.clone()));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Balance(id.clone()));
     } else {
         env.storage()
             .persistent()

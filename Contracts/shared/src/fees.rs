@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, Address, Env, token};
+use soroban_sdk::{contracterror, token, Address, Env};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -12,14 +12,14 @@ pub struct FeeManager;
 
 impl FeeManager {
     /// Collects a fee from a payer to a destination.
-    /// 
+    ///
     /// # Arguments
     /// * `env` - The environment
     /// * `token` - The token contract address to pay fees in
     /// * `payer` - The address paying the fee
     /// * `destination` - The address receiving the fee
     /// * `amount` - The amount of fee to pay
-    /// 
+    ///
     /// # Returns
     /// * `Result<(), FeeError>` - Ok if successful, Error otherwise
     pub fn collect_fee(
@@ -32,13 +32,13 @@ impl FeeManager {
         if amount < 0 {
             return Err(FeeError::InvalidAmount);
         }
-        
+
         if amount == 0 {
             return Ok(());
         }
 
         let token_client = token::Client::new(env, token);
-        
+
         // Check balance
         let balance = token_client.balance(payer);
         if balance < amount {

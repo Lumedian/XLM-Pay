@@ -1,6 +1,6 @@
 use soroban_sdk::{
-    contract, contractimpl, testutils::Address as _, testutils::Ledger as _, Address, Env,
-    IntoVal, Symbol,
+    contract, contractimpl, testutils::Address as _, testutils::Ledger as _, Address, Env, IntoVal,
+    Symbol,
 };
 use token::{TokenContract, TokenContractClient};
 
@@ -10,9 +10,15 @@ struct HookReceiver;
 #[contractimpl]
 impl HookReceiver {
     pub fn on_token_transfer(env: Env, token: Address, from: Address, amount: i128) {
-        env.storage().instance().set(&Symbol::new(&env, "token"), &token);
-        env.storage().instance().set(&Symbol::new(&env, "from"), &from);
-        env.storage().instance().set(&Symbol::new(&env, "amount"), &amount);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "token"), &token);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "from"), &from);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "amount"), &amount);
     }
 }
 
@@ -134,7 +140,6 @@ fn expired_allowance_treated_as_zero() {
     env.ledger().set(ledger_info);
 
     assert_eq!(client.allowance(&owner, &spender), 0);
-
 }
 
 #[test]

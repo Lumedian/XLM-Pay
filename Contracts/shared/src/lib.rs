@@ -10,9 +10,11 @@ pub struct ContractConfig {
     pub is_paused: bool,
 }
 
+pub mod cross_contract;
 pub mod events;
 pub mod fees;
 pub mod governance;
+pub mod safe_call;
 
 /// Standard contract error codes
 pub mod errors {
