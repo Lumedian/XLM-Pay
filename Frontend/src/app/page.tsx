@@ -6,6 +6,7 @@ import { motion, type Variants } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Navbar from '@/components/Navigation/Navbar';
+import { HeroSection } from '@/components/sections/HeroSection';
 
 export default function Home() {
   const containerVariants: Variants = {
@@ -36,117 +37,80 @@ export default function Home() {
       title: 'AI-Powered Learning',
       description: 'Get personalized crypto education guidance powered by advanced AI technology.',
       icon: '🤖',
-      href: '/about',
+      href: '/academy',
     },
     {
       title: 'Stellar Ecosystem',
       description: 'Built on the robust Stellar blockchain network for fast, low-cost transactions.',
       icon: '⭐',
-      href: '/about',
+      href: '/academy',
     },
     {
       title: 'Expert Content',
       description: 'Access carefully selected learning materials from industry experts.',
       icon: '📚',
-      href: '/about',
+      href: '/academy',
     },
     {
       title: 'Interactive Learning',
       description: 'Engage with hands-on tutorials and practical exercises.',
       icon: '🎯',
-      href: '/about',
+      href: '/academy',
     },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-black">
       <Navbar />
-      
-      {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4">
-        <div className="max-w-7xl mx-auto">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-            className="text-center"
-          >
-            <motion.h1
-              variants={itemVariants}
-              className="text-5xl md:text-7xl font-bold text-gray-900 mb-6"
-            >
-              Stellara <span className="text-blue-600">AI</span>
-            </motion.h1>
-            <motion.p
-              variants={itemVariants}
-              className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto mb-8 leading-relaxed"
-            >
-              The intelligent Web3 crypto academy built on the Stellar ecosystem. 
-              Start your journey into cryptocurrency and blockchain today.
-            </motion.p>
-            <motion.div
-              variants={itemVariants}
-              className="flex flex-col sm:flex-row gap-4 justify-center"
-            >
-              <Button variant="primary" size="lg" className="px-8">
-                Get Started Free
-              </Button>
-              <Link href="/about">
-                <Button variant="outline" size="lg" className="px-8">
-                  Learn More
-                </Button>
-              </Link>
-            </motion.div>
-          </motion.div>
-        </div>
-      </section>
+
+      <HeroSection />
 
       {/* Features Section */}
-      <section className="py-20 px-4">
+      <section className="py-24 px-4 bg-black">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, margin: "-100px" }}
             variants={containerVariants}
-            className="text-center mb-16"
+            className="text-center mb-20"
           >
             <motion.h2
               variants={itemVariants}
-              className="text-3xl md:text-4xl font-bold text-gray-900 mb-4"
+              className="text-4xl md:text-5xl font-serif text-white mb-6"
             >
               Why Choose Stellara?
             </motion.h2>
             <motion.p
               variants={itemVariants}
-              className="text-xl text-gray-600 max-w-2xl mx-auto"
+              className="text-xl text-white/60 max-w-2xl mx-auto"
             >
               Discover the features that make Stellara the premier platform for Web3 education
             </motion.p>
           </motion.div>
-          
+
           <motion.div
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, margin: "-100px" }}
             variants={containerVariants}
-            className="grid md:grid-cols-2 lg:grid-cols-4 gap-6"
+            className="grid md:grid-cols-2 lg:grid-cols-4 gap-8"
           >
             {features.map((feature, index) => (
               <motion.div
                 key={index}
                 variants={itemVariants}
-                whileHover={{ y: -5 }}
-                transition={{ duration: 0.2 }}
+                whileHover={{ y: -10 }}
+                transition={{ duration: 0.3 }}
               >
                 <Link href={feature.href}>
-                  <Card className="h-full bg-white/70 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-shadow duration-300 cursor-pointer">
-                    <CardContent className="p-6 text-center">
-                      <div className="text-4xl mb-4">{feature.icon}</div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-3">
+                  <Card className="h-full bg-white/5 backdrop-blur-xl border border-white/10 hover:border-blue-500/30 transition-all duration-300 cursor-pointer rounded-3xl overflow-hidden group">
+                    <CardContent className="p-8 text-center flex flex-col h-full">
+                      <div className="text-5xl mb-6 transform transition-transform group-hover:scale-110 duration-300">{feature.icon}</div>
+                      <h3 className="text-2xl font-serif text-white mb-4">
                         {feature.title}
                       </h3>
-                      <p className="text-gray-600 leading-relaxed">
+                      <p className="text-white/50 leading-relaxed flex-grow">
                         {feature.description}
                       </p>
                     </CardContent>
@@ -159,44 +123,47 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4">
+      <section className="py-24 px-4 bg-black">
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, margin: "-100px" }}
             variants={containerVariants}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-3xl p-12 md:p-16 text-white text-center"
+            className="bg-[#0012FF] rounded-[3rem] p-12 md:p-20 text-white text-center relative overflow-hidden shadow-2xl"
           >
+            {/* Decorative background circle */}
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
+
             <motion.h2
               variants={itemVariants}
-              className="text-3xl md:text-4xl font-bold mb-6"
+              className="text-4xl md:text-5xl font-serif mb-8 relative z-10"
             >
               Ready to Start Your Web3 Journey?
             </motion.h2>
             <motion.p
               variants={itemVariants}
-              className="text-xl mb-8 opacity-90 max-w-2xl mx-auto"
+              className="text-xl mb-10 text-white/80 max-w-2xl mx-auto relative z-10 font-light"
             >
               Join thousands of learners who are already mastering cryptocurrency and blockchain technology with Stellara.
             </motion.p>
             <motion.div
               variants={itemVariants}
-              className="flex flex-col sm:flex-row gap-4 justify-center"
+              className="flex flex-col sm:flex-row gap-6 justify-center relative z-10"
             >
-              <Link href="/about">
-                <Button 
-                  variant="secondary" 
-                  size="lg" 
-                  className="px-8 bg-white text-blue-600 hover:bg-gray-100"
+              <Link href="/academy">
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="px-10 py-4 rounded-full bg-white text-[#0012FF] hover:bg-gray-100 font-bold transition-all"
                 >
                   Learn About Us
                 </Button>
               </Link>
-              <Button 
-                variant="outline" 
-                size="lg" 
-                className="px-8 border-2 border-white text-white hover:bg-white hover:text-blue-600"
+              <Button
+                variant="outline"
+                size="lg"
+                className="px-10 py-4 rounded-full border-2 border-white text-white hover:bg-white/10 font-bold transition-all"
               >
                 Get Started
               </Button>
