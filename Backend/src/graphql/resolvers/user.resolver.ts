@@ -15,7 +15,9 @@ export class UserResolver {
 
   @Query(() => UserModel, { nullable: true })
   @UseGuards(JwtAuthGuard)
-  async user(@Args('id', { type: () => ID }) id: string): Promise<UserModel | null> {
+  async user(
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<UserModel | null> {
     const user = await this.userRepository.findOne({
       where: { id },
       relations: ['wallets'],

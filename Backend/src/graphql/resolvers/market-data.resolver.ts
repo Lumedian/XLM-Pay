@@ -1,7 +1,10 @@
 import { Resolver, Query, Args, Subscription } from '@nestjs/graphql';
 import { Inject } from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
-import { MarketSnapshotModel, AssetPriceModel } from '../models/market-snapshot.model';
+import {
+  MarketSnapshotModel,
+  AssetPriceModel,
+} from '../models/market-snapshot.model';
 import { MarketDataService } from '../../market-data/services/market-data.service';
 
 const pubSub = new PubSub() as any;

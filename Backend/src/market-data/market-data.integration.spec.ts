@@ -47,12 +47,8 @@ describe('MarketDataController (Integration)', () => {
           return removed;
         }),
         keys: jest.fn(async (pattern: string) => {
-          const prefix = pattern.endsWith('*')
-            ? pattern.slice(0, -1)
-            : pattern;
-          return Array.from(store.keys()).filter((k) =>
-            k.startsWith(prefix),
-          );
+          const prefix = pattern.endsWith('*') ? pattern.slice(0, -1) : pattern;
+          return Array.from(store.keys()).filter((k) => k.startsWith(prefix));
         }),
         exists: jest.fn(async (key: string) => (store.has(key) ? 1 : 0)),
         ttl: jest.fn(async (_key: string) => -1),

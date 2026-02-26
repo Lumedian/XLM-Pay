@@ -7,8 +7,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
 // logging and error handling
-import { LoggingModule } from './logging/logging.module';
-import { StructuredLogger } from './logging/structured-logger.service';
+// import { LoggingModule } from './logging/logging.module';
+// import { StructuredLogger } from './logging/structured-logger.service';
 
 import { RedisModule } from './redis/redis.module';
 import { VoiceModule } from './voice/voice.module';
@@ -18,7 +18,7 @@ import { WorkflowModule } from './workflow/workflow.module';
 import { QueueModule } from './queue/queue.module';
 import { AuthModule } from './auth/auth.module';
 import { MarketDataModule } from './market-data/market-data.module';
-import { AnalyticsModule } from './analytics/analytics.module';
+// import { AnalyticsModule } from './analytics/analytics.module';
 import { PersonalizationModule } from './personalization/personalization.module';
 import { GraphqlModule } from './graphql/graphql.module';
 
@@ -33,22 +33,22 @@ import { RefreshToken } from './auth/entities/refresh-token.entity';
 import { ApiToken } from './auth/entities/api-token.entity';
 import { AuditModule } from './audit/audit.module';
 import { AuditLog } from './audit/audit.entity';
-import { GdprModule } from './gdpr/gdpr.module';
-import { Consent } from './gdpr/entities/consent.entity';
+// import { GdprModule } from './gdpr/gdpr.module';
+// import { Consent } from './gdpr/entities/consent.entity';
 import { VoiceJob } from './voice/entities/voice-job.entity';
 import { ThrottleModule } from './throttle/throttle.module';
 import { ObservabilityModule } from './observability/observability.module';
-import { TenantModule } from './tenancy/tenant.module';
-import { Tenant } from './tenancy/entities/tenant.entity';
-import { TenantConfig } from './tenancy/entities/tenant-config.entity';
-import { TenantUsage } from './tenancy/entities/tenant-usage.entity';
-import { TenantInvitation } from './tenancy/entities/tenant-invitation.entity';
+// import { TenantModule } from './tenancy/tenant.module';
+// import { Tenant } from './tenancy/entities/tenant.entity';
+// import { TenantConfig } from './tenancy/entities/tenant-config.entity';
+// import { TenantUsage } from './tenancy/entities/tenant-usage.entity';
+// import { TenantInvitation } from './tenancy/entities/tenant-invitation.entity';
 import { StellarEvent } from './stellar-monitor/entities/stellar-event.entity';
 import { WebhookConsumer } from './stellar-monitor/entities/webhook-consumer.entity';
-import { BlockchainModule } from './blockchain/blockchain.module';
+// import { BlockchainModule } from './blockchain/blockchain.module';
 import { WebsocketModule } from './websocket/websocket.module';
-import { AnalyticsMetric } from './analytics/entities/analytics-metric.entity';
-import { AnalyticsAlert } from './analytics/entities/analytics-alert.entity';
+// import { AnalyticsMetric } from './analytics/entities/analytics-metric.entity';
+// import { AnalyticsAlert } from './analytics/entities/analytics-alert.entity';
 import { UserEvent } from './personalization/entities/user-event.entity';
 import { PersonalizationRule } from './personalization/entities/personalization-rule.entity';
 import { Experiment } from './personalization/entities/experiment.entity';
@@ -57,7 +57,7 @@ import { ExperimentAssignment } from './personalization/entities/experiment-assi
 @Module({
   imports: [
     // logging comes first so correlation middleware wraps every request
-    LoggingModule,
+    // LoggingModule,
 
     ConfigModule.forRoot({
       isGlobal: true,
@@ -82,16 +82,16 @@ import { ExperimentAssignment } from './personalization/entities/experiment-assi
             RefreshToken,
             ApiToken,
             AuditLog,
-            Consent,
+            // Consent,
             VoiceJob,
             // Tenant entities
-            Tenant,
-            TenantConfig,
-            TenantUsage,
-            TenantInvitation,
+            // Tenant,
+            // TenantConfig,
+            // TenantUsage,
+            // TenantInvitation,
             // Analytics entities
-            AnalyticsMetric,
-            AnalyticsAlert,
+            // AnalyticsMetric,
+            // AnalyticsAlert,
             // Personalization entities
             UserEvent,
             PersonalizationRule,
@@ -127,13 +127,13 @@ import { ExperimentAssignment } from './personalization/entities/experiment-assi
     QueueModule,
     MarketDataModule,
     AuditModule,
-    GdprModule,
+    // GdprModule,
     ThrottleModule,
     ObservabilityModule,
-    TenantModule,
-    AnalyticsModule,
+    // TenantModule,
+    // AnalyticsModule,
     PersonalizationModule,
-    BlockchainModule,
+    // BlockchainModule,
     WebsocketModule,
     GraphqlModule,
   ],
@@ -152,10 +152,10 @@ import { ExperimentAssignment } from './personalization/entities/experiment-assi
       useClass: RolesGuard,
     },
     // replace the default Nest logger with our structured implementation
-    {
-      provide: Logger,
-      useClass: StructuredLogger,
-    },
+    // {
+    //   provide: Logger,
+    //   useClass: StructuredLogger,
+    // },
   ],
 })
 export class AppModule {}

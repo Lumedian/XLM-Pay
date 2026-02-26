@@ -34,11 +34,6 @@ import { DateScalar } from './scalars/date.scalar';
     MarketDataModule,
     WorkflowModule,
   ],
-  providers: [
-    UserResolver,
-    MarketDataResolver,
-    WorkflowResolver,
-    DateScalar,
-  ],
+  providers: [UserResolver, MarketDataResolver, WorkflowResolver, DateScalar],
 })
 export class GraphqlModule {}
