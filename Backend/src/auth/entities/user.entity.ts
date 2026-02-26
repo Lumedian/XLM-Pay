@@ -9,6 +9,7 @@ import {
 import { WalletBinding } from './wallet-binding.entity';
 import { RefreshToken } from './refresh-token.entity';
 import { ApiToken } from './api-token.entity';
+import { Role } from '../roles.enum';
 
 @Entity('users')
 export class User {
@@ -20,6 +21,9 @@ export class User {
 
   @Column({ nullable: true })
   username?: string;
+
+  @Column({ type: 'varchar', default: Role.USER })
+  role: string;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
