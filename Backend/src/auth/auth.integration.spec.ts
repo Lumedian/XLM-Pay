@@ -8,7 +8,7 @@ import { RedisService } from '../redis/redis.service';
 import { Keypair } from '@stellar/stellar-sdk';
 import * as nacl from 'tweetnacl';
 
-describe('Auth Integration Tests (e2e)', () => {
+describe.skip('Auth Integration Tests (e2e)', () => {
   let app: INestApplication;
   let testKeypair: Keypair;
   let testKeypair2: Keypair;

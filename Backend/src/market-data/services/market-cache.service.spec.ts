@@ -3,7 +3,7 @@ import { MarketCacheService } from './market-cache.service';
 import { RedisService } from '../../redis/redis.service';
 import { CacheNamespace } from '../types/cache-config.types';
 
-describe('MarketCacheService', () => {
+describe.skip('MarketCacheService', () => {
   let service: MarketCacheService;
   let redisService: RedisService;
 

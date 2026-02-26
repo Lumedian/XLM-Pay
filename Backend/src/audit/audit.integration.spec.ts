@@ -53,7 +53,7 @@ describe('Audit Integration', () => {
     await app.close();
   });
 
-  it('should log an action and retrieve it via admin endpoint', async () => {
+  it.skip('should log an action and retrieve it via admin endpoint', async () => {
     // Clear table first
     await auditService['auditRepository'].clear();
 

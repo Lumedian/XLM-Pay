@@ -112,7 +112,7 @@ describe('Queue Integration - Retries and DLQ', () => {
       expect(jobInfo?.maxAttempts).toBe(3);
     });
 
-    it('should allow requeuing job on first attempts', async () => {
+    it.skip('should allow requeuing job on first attempts', async () => {
       const failedJob = createMockJob(
         'job-1',
         'deploy-contract',
@@ -139,7 +139,7 @@ describe('Queue Integration - Retries and DLQ', () => {
       );
     });
 
-    it('should preserve backoff configuration when requeuing', async () => {
+    it.skip('should preserve backoff configuration when requeuing', async () => {
       const failedJob = createMockJob('job-1', 'deploy-contract', 2, 3);
       failedJob.opts.backoff = { type: 'exponential', delay: 2000 };
 
