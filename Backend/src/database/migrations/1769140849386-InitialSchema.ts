@@ -4,6 +4,7 @@ export class InitialSchema1769140849386 implements MigrationInterface {
   name = 'InitialSchema1769140849386';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
     await queryRunner.query(
       `CREATE TYPE "public"."workflows_type_enum" AS ENUM('contract_deployment', 'trade_execution', 'ai_job_chain', 'indexing_verification', 'portfolio_update', 'reward_grant')`,
     );

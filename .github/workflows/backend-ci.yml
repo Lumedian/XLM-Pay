@@ -240,7 +240,7 @@ jobs:
           REDIS_PORT: 6379
           NODE_ENV: test
           JWT_SECRET: test-secret-key-for-ci
-        run: npm run test -- --testPathPattern="integration" --runInBand
+        run: npm run test -- --testPathPatterns="integration" --runInBand
 
   # =============================================================================
   # E2E TESTS
