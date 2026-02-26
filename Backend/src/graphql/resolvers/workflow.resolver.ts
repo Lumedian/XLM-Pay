@@ -43,8 +43,8 @@ export class WorkflowResolver {
   @Query(() => [WorkflowModel])
   @UseGuards(JwtAuthGuard)
   async workflows(
-    @Args('state', { nullable: true }) state?: WorkflowState,
-    @Args('userId', { nullable: true }) userId?: string,
+    @Args('state', { type: () => String, nullable: true }) state?: WorkflowState,
+    @Args('userId', { type: () => String, nullable: true }) userId?: string,
   ): Promise<WorkflowModel[]> {
     let workflows: Workflow[];
 

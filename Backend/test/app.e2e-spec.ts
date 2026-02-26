@@ -14,6 +14,12 @@ describe('AppController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+  }, 30000); // Increase timeout for CI environment
+
+  afterEach(async () => {
+    if (app) {
+      await app.close();
+    }
   });
 
   it('/ (GET)', () => {

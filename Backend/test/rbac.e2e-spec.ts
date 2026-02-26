@@ -13,7 +13,7 @@ describe('RBAC Enforcement', () => {
 
     app = module.createNestApplication();
     await app.init();
-  });
+  }, 30000); // Increase timeout for CI environment
 
   it('should block USER from audit logs', () => {
     return request(app.getHttpServer())
@@ -30,6 +30,8 @@ describe('RBAC Enforcement', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 });
