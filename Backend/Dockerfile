@@ -6,11 +6,14 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install dependencies (including devDependencies for build)
 RUN npm ci
 
 # Copy source code
 COPY . .
+
+# Clean any existing build artifacts
+RUN rm -rf dist
 
 # Build application
 RUN npm run build
