@@ -91,7 +91,9 @@ export class WorkflowStep {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @ManyToOne(() => Workflow, workflow => workflow.steps, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Workflow, (workflow) => workflow.steps, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'workflowId' })
   workflow: Workflow;
 }

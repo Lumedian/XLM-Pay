@@ -24,10 +24,7 @@ export class TracingInterceptor implements NestInterceptor {
     private metricsService: MetricsService,
   ) {}
 
-  intercept(
-    context: ExecutionContext,
-    next: CallHandler,
-  ): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
 
@@ -103,20 +100,16 @@ export class TracingInterceptor implements NestInterceptor {
         );
 
         // Log error
-        this.loggingService.error(
-          'HTTP request error',
-          error,
-          {
-            traceId: traceContext.traceId,
-            spanId: traceContext.spanId,
-            method: request.method,
-            path: request.path,
-            statusCode: response.statusCode,
-            duration,
-            userId: traceContext.userId,
-            errorMessage: error.message,
-          },
-        );
+        this.loggingService.error('HTTP request error', error, {
+          traceId: traceContext.traceId,
+          spanId: traceContext.spanId,
+          method: request.method,
+          path: request.path,
+          statusCode: response.statusCode,
+          duration,
+          userId: traceContext.userId,
+          errorMessage: error.message,
+        });
 
         throw error;
       }),

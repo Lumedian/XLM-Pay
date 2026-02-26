@@ -29,17 +29,32 @@ export class RecommendationService {
     } else if (typeof params.userId === 'string') {
       where.userId = params.userId;
     }
-    const recent = await this.eventRepo.find({ where, order: { timestamp: 'DESC' }, take: 500 });
+    const recent = await this.eventRepo.find({
+      where,
+      order: { timestamp: 'DESC' },
+      take: 500,
+    });
 
     const recentItems = recent
-      .filter((e) => e.itemId && [UserEventType.VIEW, UserEventType.CLICK, UserEventType.LIKE, UserEventType.PURCHASE].includes(e.eventType))
+      .filter(
+        (e) =>
+          e.itemId &&
+          [
+            UserEventType.VIEW,
+            UserEventType.CLICK,
+            UserEventType.LIKE,
+            UserEventType.PURCHASE,
+          ].includes(e.eventType),
+      )
       .map((e) => e.itemId as string);
 
     const itemSet = new Set(recentItems);
     const candidates = new Map<string, { score: number; reasons: string[] }>();
 
     if (recentItems.length > 0) {
-      const sessions = Array.from(new Set(recent.map((e) => e.sessionId).filter(Boolean))) as string[];
+      const sessions = Array.from(
+        new Set(recent.map((e) => e.sessionId).filter(Boolean)),
+      ) as string[];
       if (sessions.length > 0) {
         const qb = this.eventRepo
           .createQueryBuilder('e')
@@ -50,7 +65,10 @@ export class RecommendationService {
         if (params.tenantId) {
           qb.andWhere('e.tenantId = :tenantId', { tenantId: params.tenantId });
         }
-        const rows = await qb.getRawMany<{ sessionId: string; itemId: string }>();
+        const rows = await qb.getRawMany<{
+          sessionId: string;
+          itemId: string;
+        }>();
         const bySession = new Map<string, string[]>();
         for (const r of rows) {
           if (!bySession.has(r.sessionId)) bySession.set(r.sessionId, []);
@@ -95,7 +113,11 @@ export class RecommendationService {
     }
 
     const out: Recommendation[] = Array.from(candidates.entries())
-      .map(([itemId, v]) => ({ itemId, score: v.score, reasons: v.reasons.slice(0, 3) }))
+      .map(([itemId, v]) => ({
+        itemId,
+        score: v.score,
+        reasons: v.reasons.slice(0, 3),
+      }))
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 

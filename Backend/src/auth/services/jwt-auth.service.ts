@@ -7,8 +7,7 @@ import { RefreshToken } from '../entities/refresh-token.entity';
 import { User } from '../entities/user.entity';
 import { v4 as uuidv4 } from 'uuid';
 import { AuditService } from '../../audit/audit.service';
-import { AuditEvent } from '../../audit/audit.event';  
-
+import { AuditEvent } from '../../audit/audit.event';
 
 export interface JwtPayload {
   sub: string; // user id
@@ -27,22 +26,25 @@ export class JwtAuthService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly auditService: AuditService,
-  
   ) {}
 
-  async generateAccessToken(userId: string, walletId?: string): Promise<string> {
+  async generateAccessToken(
+    userId: string,
+    walletId?: string,
+  ): Promise<string> {
     const payload: JwtPayload = {
       sub: userId,
       walletId,
     };
-
 
     return this.jwtService.sign(payload, {
       expiresIn: this.configService.get('JWT_ACCESS_EXPIRATION', '15m'),
     });
   }
 
-  async generateRefreshToken(userId: string): Promise<{ token: string; id: string; expiresAt: Date }> {
+  async generateRefreshToken(
+    userId: string,
+  ): Promise<{ token: string; id: string; expiresAt: Date }> {
     const token = uuidv4();
     const expirationDays = 7;
     const expiresAt = new Date();
@@ -59,10 +61,14 @@ export class JwtAuthService {
 
     // Get user details for audit event
     const user = await this.userRepository.findOne({ where: { id: userId } });
-    
+
     // Log refresh token creation
-    await this.auditService.logAction('REFRESH_TOKEN_CREATED', userId, saved.id, { expiresAt: saved.expiresAt });
-    
+    await this.auditService.logAction(
+      'REFRESH_TOKEN_CREATED',
+      userId,
+      saved.id,
+      { expiresAt: saved.expiresAt },
+    );
 
     return {
       token: saved.token,
@@ -80,7 +86,9 @@ export class JwtAuthService {
     }
   }
 
-  async refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; newRefreshToken: string }> {
+  async refreshAccessToken(
+    refreshToken: string,
+  ): Promise<{ accessToken: string; newRefreshToken: string }> {
     const tokenRecord = await this.refreshTokenRepository.findOne({
       where: { token: refreshToken },
       relations: ['user'],
@@ -107,10 +115,15 @@ export class JwtAuthService {
 
     // Generate new tokens
     const accessToken = await this.generateAccessToken(tokenRecord.userId);
-    const newRefreshTokenData = await this.generateRefreshToken(tokenRecord.userId);
+    const newRefreshTokenData = await this.generateRefreshToken(
+      tokenRecord.userId,
+    );
 
-    await this.auditService.logAction( 'ACCESS_TOKEN_REFRESHED', tokenRecord.userId, tokenRecord.id
-);
+    await this.auditService.logAction(
+      'ACCESS_TOKEN_REFRESHED',
+      tokenRecord.userId,
+      tokenRecord.id,
+    );
 
     return {
       accessToken,
@@ -125,12 +138,13 @@ export class JwtAuthService {
         revoked: true,
         revokedAt: new Date(),
       },
-
     );
 
-    await this.auditService.logAction('REFRESH_TOKEN_REVOKED', tokenId, tokenId
-);
-
+    await this.auditService.logAction(
+      'REFRESH_TOKEN_REVOKED',
+      tokenId,
+      tokenId,
+    );
   }
 
   async revokeAllUserRefreshTokens(userId: string): Promise<void> {

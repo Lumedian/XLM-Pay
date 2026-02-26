@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Param, Query, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  Logger,
+  BadRequestException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { QueueService } from '../services/queue.service';
 import { JobInfo, JobStatus } from '../types/job.types';
@@ -93,7 +101,10 @@ export class QueueAdminController {
   @ApiResponse({ status: 200, description: 'Job details' })
   @ApiResponse({ status: 404, description: 'Job not found' })
   @ApiResponse({ status: 400, description: 'Invalid queue name' })
-  async getJob(@Param('queueName') queueName: string, @Param('jobId') jobId: string) {
+  async getJob(
+    @Param('queueName') queueName: string,
+    @Param('jobId') jobId: string,
+  ) {
     const validQueues = ['deploy-contract', 'process-tts', 'index-market-news'];
 
     if (!validQueues.includes(queueName)) {
@@ -105,7 +116,9 @@ export class QueueAdminController {
     const job = await this.queueService.getJobInfo(queueName, jobId);
 
     if (!job) {
-      throw new BadRequestException(`Job ${jobId} not found in queue ${queueName}`);
+      throw new BadRequestException(
+        `Job ${jobId} not found in queue ${queueName}`,
+      );
     }
 
     return {
@@ -133,7 +146,10 @@ export class QueueAdminController {
       );
     }
 
-    const dlqItems = await this.queueService.getDeadLetterQueue(queueName, limit);
+    const dlqItems = await this.queueService.getDeadLetterQueue(
+      queueName,
+      limit,
+    );
 
     return {
       success: true,
@@ -203,7 +219,10 @@ export class QueueAdminController {
       );
     }
 
-    const requeuedJobs = await this.queueService.requeueFromDLQ(queueName, limit);
+    const requeuedJobs = await this.queueService.requeueFromDLQ(
+      queueName,
+      limit,
+    );
 
     return {
       success: true,

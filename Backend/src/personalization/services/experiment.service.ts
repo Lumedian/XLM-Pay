@@ -42,7 +42,10 @@ export class ExperimentService {
     return this.expRepo.find({ where, order: { createdAt: 'DESC' } });
   }
 
-  async updateExperiment(key: string, patch: Partial<Experiment>): Promise<Experiment | null> {
+  async updateExperiment(
+    key: string,
+    patch: Partial<Experiment>,
+  ): Promise<Experiment | null> {
     const exp = await this.expRepo.findOne({ where: { key } });
     if (!exp) return null;
     Object.assign(exp, patch);
@@ -64,12 +67,23 @@ export class ExperimentService {
     return this.expRepo.save(exp);
   }
 
-  async assignVariant(params: { experimentKey: string; userId: string; tenantId?: string | null }): Promise<ExperimentAssignment | null> {
-    const exp = await this.expRepo.findOne({ where: { key: params.experimentKey } });
+  async assignVariant(params: {
+    experimentKey: string;
+    userId: string;
+    tenantId?: string | null;
+  }): Promise<ExperimentAssignment | null> {
+    const exp = await this.expRepo.findOne({
+      where: { key: params.experimentKey },
+    });
     if (!exp || exp.status !== ExperimentStatus.RUNNING) return null;
-    const existing = await this.assignRepo.findOne({ where: { experimentKey: exp.key, userId: params.userId } });
+    const existing = await this.assignRepo.findOne({
+      where: { experimentKey: exp.key, userId: params.userId },
+    });
     if (existing) return existing;
-    const variant = this.selectVariantDeterministic(params.userId, exp.variants);
+    const variant = this.selectVariantDeterministic(
+      params.userId,
+      exp.variants,
+    );
     const assignment = this.assignRepo.create({
       experimentKey: exp.key,
       tenantId: params.tenantId ?? exp.tenantId ?? null,
@@ -79,13 +93,23 @@ export class ExperimentService {
     return this.assignRepo.save(assignment);
   }
 
-  async getAssignment(experimentKey: string, userId: string): Promise<ExperimentAssignment | null> {
+  async getAssignment(
+    experimentKey: string,
+    userId: string,
+  ): Promise<ExperimentAssignment | null> {
     return this.assignRepo.findOne({ where: { experimentKey, userId } });
   }
 
   async getReport(experimentKey: string): Promise<{
     experimentKey: string;
-    variants: Array<{ name: string; impressions: number; clicks: number; purchases: number; ctr: number; conversionRate: number }>;
+    variants: Array<{
+      name: string;
+      impressions: number;
+      clicks: number;
+      purchases: number;
+      ctr: number;
+      conversionRate: number;
+    }>;
   } | null> {
     const exp = await this.expRepo.findOne({ where: { key: experimentKey } });
     if (!exp) return null;
@@ -93,9 +117,18 @@ export class ExperimentService {
     const rows = await this.eventRepo
       .createQueryBuilder('e')
       .select(['e.variant AS variant'])
-      .addSelect(`SUM(CASE WHEN e.eventType = :view THEN 1 ELSE 0 END)`, 'impressions')
-      .addSelect(`SUM(CASE WHEN e.eventType = :click THEN 1 ELSE 0 END)`, 'clicks')
-      .addSelect(`SUM(CASE WHEN e.eventType = :purchase THEN 1 ELSE 0 END)`, 'purchases')
+      .addSelect(
+        `SUM(CASE WHEN e.eventType = :view THEN 1 ELSE 0 END)`,
+        'impressions',
+      )
+      .addSelect(
+        `SUM(CASE WHEN e.eventType = :click THEN 1 ELSE 0 END)`,
+        'clicks',
+      )
+      .addSelect(
+        `SUM(CASE WHEN e.eventType = :purchase THEN 1 ELSE 0 END)`,
+        'purchases',
+      )
       .where('e.experimentId = :experimentKey', { experimentKey })
       .groupBy('e.variant')
       .setParameters({
@@ -103,8 +136,16 @@ export class ExperimentService {
         click: UserEventType.CLICK,
         purchase: UserEventType.PURCHASE,
       })
-      .getRawMany<{ variant: string; impressions: string; clicks: string; purchases: string }>();
-    const byVariant = new Map<string, { impressions: number; clicks: number; purchases: number }>();
+      .getRawMany<{
+        variant: string;
+        impressions: string;
+        clicks: string;
+        purchases: string;
+      }>();
+    const byVariant = new Map<
+      string,
+      { impressions: number; clicks: number; purchases: number }
+    >();
     for (const r of rows) {
       const v = r.variant || 'unknown';
       byVariant.set(v, {
@@ -114,17 +155,34 @@ export class ExperimentService {
       });
     }
     const out = variants.map((name) => {
-      const v = byVariant.get(name) || { impressions: 0, clicks: 0, purchases: 0 };
+      const v = byVariant.get(name) || {
+        impressions: 0,
+        clicks: 0,
+        purchases: 0,
+      };
       const ctr = v.impressions > 0 ? v.clicks / v.impressions : 0;
       const conversionRate = v.clicks > 0 ? v.purchases / v.clicks : 0;
-      return { name, impressions: v.impressions, clicks: v.clicks, purchases: v.purchases, ctr, conversionRate };
+      return {
+        name,
+        impressions: v.impressions,
+        clicks: v.clicks,
+        purchases: v.purchases,
+        ctr,
+        conversionRate,
+      };
     });
     return { experimentKey, variants: out };
   }
 
-  private selectVariantDeterministic(userId: string, variants: Array<{ name: string; weight: number }>): string {
+  private selectVariantDeterministic(
+    userId: string,
+    variants: Array<{ name: string; weight: number }>,
+  ): string {
     const total = variants.reduce((s, v) => s + v.weight, 0);
-    const normalized = variants.map((v) => ({ name: v.name, weight: v.weight / total }));
+    const normalized = variants.map((v) => ({
+      name: v.name,
+      weight: v.weight / total,
+    }));
     let x = this.hashToUnit(userId);
     for (const v of normalized) {
       if (x < v.weight) return v.name;

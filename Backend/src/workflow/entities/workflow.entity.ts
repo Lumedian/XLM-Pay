@@ -90,6 +90,6 @@ export class Workflow {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @OneToMany(() => WorkflowStep, step => step.workflow, { cascade: true })
+  @OneToMany(() => WorkflowStep, (step) => step.workflow, { cascade: true })
   steps: WorkflowStep[];
 }

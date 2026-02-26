@@ -37,6 +37,7 @@ import { WorkflowAdminController } from './controllers/workflow-admin.controller
     CompensationService,
     RecoveryService,
     MonitoringService,
+    TypeOrmModule,
   ],
 })
 export class WorkflowModule {}

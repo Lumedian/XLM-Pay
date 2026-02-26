@@ -1,6 +1,9 @@
 import { RuleEngineService } from './services/rule-engine.service';
 import { Repository } from 'typeorm';
-import { PersonalizationRule, RuleStatus } from './entities/personalization-rule.entity';
+import {
+  PersonalizationRule,
+  RuleStatus,
+} from './entities/personalization-rule.entity';
 import { UserEvent } from './entities/user-event.entity';
 
 describe('RuleEngineService', () => {
@@ -23,7 +26,13 @@ describe('RuleEngineService', () => {
           description: null,
           status: RuleStatus.ACTIVE,
           priority: 10,
-          conditions: { type: 'event_frequency', eventType: 'view', operator: '>=', threshold: 2, days: 30 },
+          conditions: {
+            type: 'event_frequency',
+            eventType: 'view',
+            operator: '>=',
+            threshold: 2,
+            days: 30,
+          },
           actions: [{ type: 'show_banner', bannerId: 'promo-123' }],
           tenantId: null,
           createdAt: new Date(),
@@ -40,9 +49,12 @@ describe('RuleEngineService', () => {
   });
 
   it('evaluates rules and returns actions when conditions pass', async () => {
-    const actions = await service.evaluate({ userId: 'u1', tenantId: null, attributes: {} });
+    const actions = await service.evaluate({
+      userId: 'u1',
+      tenantId: null,
+      attributes: {},
+    });
     expect(actions.length).toBe(1);
     expect(actions[0]).toEqual({ type: 'show_banner', bannerId: 'promo-123' });
   });
 });
-

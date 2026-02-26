@@ -28,13 +28,14 @@ import { CreateApiTokenDto } from '../dto/create-api-token.dto';
 import { BindWalletDto } from '../dto/bind-wallet.dto';
 import { UnbindWalletDto } from '../dto/unbind-wallet.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
-import { RateLimitGuard, RateLimit } from '../guards/rate-limit.guard';
+import { ThrottleGuard } from '../../throttle/throttle.guard';
+import { ThrottleStrategy } from '../../throttle/throttle.decorator';
 import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../../audit/audit.service';
 
 @ApiTags('Authentication')
 @Controller('auth')
-@UseGuards(RateLimitGuard)
+@UseGuards(ThrottleGuard)
 export class AuthController {
   constructor(
     private readonly nonceService: NonceService,
@@ -42,11 +43,11 @@ export class AuthController {
     private readonly jwtAuthService: JwtAuthService,
     private readonly apiTokenService: ApiTokenService,
     private readonly configService: ConfigService,
-    private readonly auditService: AuditService, 
+    private readonly auditService: AuditService,
   ) {}
 
   @Post('nonce')
-  @RateLimit({ limit: 5, windowSeconds: 60, keyPrefix: 'nonce' })
+  @ThrottleStrategy('AUTH')
   @ApiOperation({ summary: 'Request a nonce for wallet authentication' })
   @ApiBody({ type: RequestNonceDto })
   @ApiResponse({
@@ -66,7 +67,7 @@ export class AuthController {
   }
 
   @Post('wallet/login')
-  @RateLimit({ limit: 5, windowSeconds: 60, keyPrefix: 'login' })
+  @ThrottleStrategy('AUTH')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with wallet signature' })
   @ApiBody({ type: WalletLoginDto })
@@ -125,23 +126,24 @@ export class AuthController {
     let isNewUser = false;
 
     if (!user) {
-     user = await this.walletService.createUserWithWallet(dto.publicKey);
-     isNewUser = true;
-  }
+      user = await this.walletService.createUserWithWallet(dto.publicKey);
+      isNewUser = true;
+    }
 
-     if (isNewUser) {await this.auditService.logAction(  'USER_CREATED',  user.id,  user.id,
-      { wallet: dto.publicKey }
-    );
-}
-
+    if (isNewUser) {
+      await this.auditService.logAction('USER_CREATED', user.id, user.id, {
+        wallet: dto.publicKey,
+      });
+    }
 
     // Update wallet last used
     await this.walletService.updateLastUsed(dto.publicKey);
 
     // Generate tokens
     const accessToken = await this.jwtAuthService.generateAccessToken(user.id);
-    const refreshTokenData =
-      await this.jwtAuthService.generateRefreshToken(user.id);
+    const refreshTokenData = await this.jwtAuthService.generateRefreshToken(
+      user.id,
+    );
 
     return {
       accessToken,
@@ -156,7 +158,7 @@ export class AuthController {
   }
 
   @Post('refresh')
-  @RateLimit({ limit: 10, windowSeconds: 60, keyPrefix: 'refresh' })
+  @ThrottleStrategy('AUTH')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiBody({ type: RefreshTokenDto })

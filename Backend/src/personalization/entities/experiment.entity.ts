@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 export enum ExperimentStatus {
   DRAFT = 'draft',
@@ -22,7 +29,11 @@ export class Experiment {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({ type: 'enum', enum: ExperimentStatus, default: ExperimentStatus.DRAFT })
+  @Column({
+    type: 'enum',
+    enum: ExperimentStatus,
+    default: ExperimentStatus.DRAFT,
+  })
   status: ExperimentStatus;
 
   @Column({ type: 'json' })

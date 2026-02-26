@@ -19,18 +19,28 @@ describe('ThrottleController (e2e)', () => {
     await app.close();
   });
 
-  it('should enforce rate limit and return headers', async () => {
-    const res = await request(app.getHttpServer()).get('/auth/login');
+  it('should enforce global rate limit and return headers', async () => {
+    const res = await request(app.getHttpServer()).get('/');
 
-    expect(res.headers['x-ratelimit-limit']).toBeDefined();
+    expect(res.headers['x-ratelimit-limit']).toBe('100');
+    expect(res.headers['x-ratelimit-remaining']).toBeDefined();
   });
 
-  it('should return 429 after exceeding limit', async () => {
-    for (let i = 0; i < 6; i++) {
-      await request(app.getHttpServer()).post('/auth/login');
+  it('should enforce auth rate limit and return 429 after 5 requests', async () => {
+    const publicKey = 'G...',
+      nonce = '...';
+
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app.getHttpServer())
+        .post('/auth/nonce')
+        .send({ publicKey });
+      expect(res.status).not.toBe(429);
+      expect(res.headers['x-ratelimit-limit']).toBe('5');
     }
 
-    const res = await request(app.getHttpServer()).post('/auth/login');
+    const res = await request(app.getHttpServer())
+      .post('/auth/nonce')
+      .send({ publicKey });
     expect(res.status).toBe(429);
   });
 });

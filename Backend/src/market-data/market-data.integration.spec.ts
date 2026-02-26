@@ -3,14 +3,70 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { MarketDataModule } from './market-data.module';
 import { RedisModule } from '../redis/redis.module';
+import { RedisService } from '../redis/redis.service';
 
 describe('MarketDataController (Integration)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
+    // In-memory Redis mock to simulate caching behavior
+    const store = new Map<string, string>();
+
+    const mockRedisService = {
+      client: {
+        get: jest.fn(async (key: string) => store.get(key) ?? null),
+        set: jest.fn(
+          async (
+            key: string,
+            value: string,
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            options?: { EX?: number },
+          ) => {
+            store.set(key, value);
+            return 'OK';
+          },
+        ),
+        incr: jest.fn(async (key: string) => {
+          const current = parseInt(store.get(key) ?? '0', 10);
+          const next = current + 1;
+          store.set(key, next.toString());
+          return next;
+        }),
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        expire: jest.fn(async (_key: string, _seconds: number) => 1),
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        eval: jest.fn(async (_script: string, _args: unknown[]) => [1, 60]),
+        del: jest.fn(async (keys: string | string[]) => {
+          const arr = Array.isArray(keys) ? keys : [keys];
+          let removed = 0;
+          for (const k of arr) {
+            if (store.delete(k)) {
+              removed++;
+            }
+          }
+          return removed;
+        }),
+        keys: jest.fn(async (pattern: string) => {
+          const prefix = pattern.endsWith('*')
+            ? pattern.slice(0, -1)
+            : pattern;
+          return Array.from(store.keys()).filter((k) =>
+            k.startsWith(prefix),
+          );
+        }),
+        exists: jest.fn(async (key: string) => (store.has(key) ? 1 : 0)),
+        ttl: jest.fn(async (_key: string) => -1),
+        connect: jest.fn(async () => undefined),
+        quit: jest.fn(async () => undefined),
+      },
+    };
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [MarketDataModule, RedisModule],
-    }).compile();
+    })
+      .overrideProvider(RedisService)
+      .useValue(mockRedisService)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
@@ -45,6 +101,11 @@ describe('MarketDataController (Integration)', () => {
     });
 
     it('should serve from cache on second request', async () => {
+      // Clear cache first to ensure a clean state
+      await request(app.getHttpServer())
+        .post('/market-data/cache/invalidate/market')
+        .expect(200);
+
       // First request - cache miss
       const firstResponse = await request(app.getHttpServer())
         .get('/market-data/snapshot')

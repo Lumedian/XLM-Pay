@@ -11,9 +11,27 @@ import { ExperimentService } from './services/experiment.service';
 import { PersonalizationController } from './personalization.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UserEvent, PersonalizationRule, Experiment, ExperimentAssignment])],
-  providers: [EventTrackingService, RecommendationService, RuleEngineService, ExperimentService],
+  imports: [
+    TypeOrmModule.forFeature([
+      UserEvent,
+      PersonalizationRule,
+      Experiment,
+      ExperimentAssignment,
+    ]),
+  ],
+  providers: [
+    EventTrackingService,
+    RecommendationService,
+    RuleEngineService,
+    ExperimentService,
+  ],
   controllers: [PersonalizationController],
-  exports: [EventTrackingService, RecommendationService, RuleEngineService, ExperimentService, TypeOrmModule],
+  exports: [
+    EventTrackingService,
+    RecommendationService,
+    RuleEngineService,
+    ExperimentService,
+    TypeOrmModule,
+  ],
 })
 export class PersonalizationModule {}

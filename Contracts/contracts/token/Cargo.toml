@@ -7,11 +7,16 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = "=20.5.0"
+soroban-sdk = { workspace = true }
 shared = { path = "../../shared" }
 
 [dev-dependencies]
-soroban-sdk = { version = "=20.5.0", features = ["testutils"] }
+soroban-sdk = { workspace = true, features = ["testutils"] }
+proptest = "1.4.0"
+arbitrary = { version = "1.3.2", features = ["derive"] }
+quickcheck = "1.0.3"
+quickcheck_macros = "1.0.0"
+cargo-llvm-cov = "0.6"
 
 [features]
 default = ["testutils"]

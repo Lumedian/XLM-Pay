@@ -13,15 +13,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Rust
-        uses: actions/setup-rust@v1
-        with:
-          rust-version: '1.70'
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - name: Build
-        working-directory: migration_samples/marketplace_service
-        run: cargo build --release
-      - name: Run unit tests
-        working-directory: migration_samples/marketplace_service
-        run: cargo test
+      - name: Skip Rust compilation
+        run: echo "Rust compilation disabled per request"

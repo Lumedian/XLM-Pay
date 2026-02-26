@@ -1,5 +1,20 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
@@ -27,7 +42,8 @@ export class PersonalizationController {
   @ApiOperation({ summary: 'Record a user event' })
   @Roles(Role.USER, Role.ADMIN, Role.SUPERADMIN)
   async recordEvent(
-    @Body() body: {
+    @Body()
+    body: {
       tenantId?: string | null;
       userId?: string | null;
       eventType: UserEventType;
@@ -48,8 +64,16 @@ export class PersonalizationController {
   @ApiQuery({ name: 'tenantId', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @Roles(Role.USER, Role.ADMIN, Role.SUPERADMIN)
-  async getRecommendations(@Query('userId') userId?: string, @Query('tenantId') tenantId?: string, @Query('limit') limit?: string) {
-    return this.recs.getRecommendations({ userId: userId ?? null, tenantId: tenantId ?? null, limit: limit ? parseInt(limit, 10) : undefined });
+  async getRecommendations(
+    @Query('userId') userId?: string,
+    @Query('tenantId') tenantId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.recs.getRecommendations({
+      userId: userId ?? null,
+      tenantId: tenantId ?? null,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
   }
 
   @Get('rules')
@@ -64,7 +88,16 @@ export class PersonalizationController {
   @ApiOperation({ summary: 'Create a personalization rule' })
   @Roles(Role.ADMIN, Role.SUPERADMIN)
   async createRule(
-    @Body() body: { name: string; description?: string; priority?: number; status?: RuleStatus; conditions: any; actions: any; tenantId?: string | null },
+    @Body()
+    body: {
+      name: string;
+      description?: string;
+      priority?: number;
+      status?: RuleStatus;
+      conditions: any;
+      actions: any;
+      tenantId?: string | null;
+    },
   ) {
     return this.rules.createRule(body);
   }
@@ -86,15 +119,33 @@ export class PersonalizationController {
   @Post('rules:evaluate')
   @ApiOperation({ summary: 'Evaluate rules for a user context' })
   @Roles(Role.USER, Role.ADMIN, Role.SUPERADMIN)
-  async evaluate(@Body() body: { userId?: string | null; tenantId?: string | null; attributes?: Record<string, any> }) {
-    return this.rules.evaluate({ userId: body.userId ?? null, tenantId: body.tenantId ?? null, attributes: body.attributes ?? {} });
+  async evaluate(
+    @Body()
+    body: {
+      userId?: string | null;
+      tenantId?: string | null;
+      attributes?: Record<string, any>;
+    },
+  ) {
+    return this.rules.evaluate({
+      userId: body.userId ?? null,
+      tenantId: body.tenantId ?? null,
+      attributes: body.attributes ?? {},
+    });
   }
 
   @Post('experiments')
   @ApiOperation({ summary: 'Create an experiment' })
   @Roles(Role.ADMIN, Role.SUPERADMIN)
   async createExperiment(
-    @Body() body: { key: string; name: string; description?: string; variants: Array<{ name: string; weight: number }>; tenantId?: string | null },
+    @Body()
+    body: {
+      key: string;
+      name: string;
+      description?: string;
+      variants: Array<{ name: string; weight: number }>;
+      tenantId?: string | null;
+    },
   ) {
     return this.experiments.createExperiment(body);
   }
@@ -124,8 +175,15 @@ export class PersonalizationController {
   @Post('experiments/:key/assign')
   @ApiOperation({ summary: 'Assign a user to a variant' })
   @Roles(Role.USER, Role.ADMIN, Role.SUPERADMIN)
-  async assign(@Param('key') key: string, @Body() body: { userId: string; tenantId?: string | null }) {
-    return this.experiments.assignVariant({ experimentKey: key, userId: body.userId, tenantId: body.tenantId ?? null });
+  async assign(
+    @Param('key') key: string,
+    @Body() body: { userId: string; tenantId?: string | null },
+  ) {
+    return this.experiments.assignVariant({
+      experimentKey: key,
+      userId: body.userId,
+      tenantId: body.tenantId ?? null,
+    });
   }
 
   @Get('experiments/:key/report')

@@ -1,0 +1,171 @@
+# Justfile for comprehensive test suite management
+
+# Default target
+default: test-all
+
+# Run all tests with coverage
+test-all:
+    cargo test --all-features
+    cargo llvm-cov --all-features --html
+
+# Run specific test categories
+test-unit:
+    cargo test --test conformance --test access-control --test adversarial
+
+test-property:
+    cargo test --test property_based
+
+test-fuzz:
+    cargo test --test fuzzing
+
+test-edge:
+    cargo test --test edge_cases
+
+test-integration:
+    cargo test --test integration
+
+test-comprehensive:
+    cargo test --test comprehensive
+
+# Run tests with different configurations
+test-release:
+    cargo test --release --all-features
+
+test-debug:
+    cargo test --all-features -- --nocapture
+
+# Coverage analysis
+coverage:
+    cargo llvm-cov --all-features --html --open
+    cargo llvm-cov --all-features --text
+
+coverage-summary:
+    cargo llvm-cov --all-features --summary
+
+# Performance benchmarks
+bench:
+    cargo test --release --all-features -- --ignored
+
+# Property-based testing with more cases
+property-heavy:
+    cargo test --test property_based --features testutils -- --test-threads=1
+
+# Fuzzing tests
+fuzz-heavy:
+    cargo test --test fuzzing --features testutils -- --test-threads=1
+
+# Run tests in different modes
+test-parallel:
+    cargo test --all-features -- --test-threads=$(nproc)
+
+test-sequential:
+    cargo test --all-features -- --test-threads=1
+
+# Documentation tests
+test-docs:
+    cargo test --doc
+
+# Check code formatting and linting
+check:
+    cargo fmt -- --check
+    cargo clippy --all-features -- -D warnings
+
+# Format code
+fmt:
+    cargo fmt
+
+# Run linter
+clippy:
+    cargo clippy --all-features
+
+# Build verification
+build:
+    cargo build --all-features
+    cargo build --release --all-features
+
+# Clean build artifacts
+clean:
+    cargo clean
+    cargo llvm-cov --clean
+
+# Comprehensive test report
+report: test-all
+    @echo "=== Test Report ==="
+    @echo "All tests completed"
+    @echo "Coverage report available in target/llvm-cov/html/index.html"
+    @echo "=== Coverage Summary ==="
+    @cargo llvm-cov --all-features --summary
+
+# Quick test for development
+quick:
+    cargo test --test conformance --test access-control
+
+# Full CI pipeline simulation
+ci: clean check test-all build
+    @echo "CI pipeline completed successfully"
+
+# Development helpers
+watch:
+    cargo watch -x "test --all-features"
+
+watch-quick:
+    cargo watch -x "test --test conformance"
+
+# Generate test matrix
+matrix:
+    @echo "Running test matrix..."
+    make test-unit
+    make test-property
+    make test-fuzz
+    make test-edge
+    make test-integration
+    make test-comprehensive
+    @echo "Test matrix completed"
+
+# Stress testing
+stress:
+    cargo test --test property_based --features testutils -- --test-threads=1 --ignored
+    cargo test --test fuzzing --features testutils -- --test-threads=1 --ignored
+
+# Memory and performance profiling
+profile:
+    cargo test --release --all-features --features profiling
+
+# Security-focused testing
+security:
+    cargo test --test adversarial --test fuzzing --features testutils
+
+# Contract-specific tests
+token-tests:
+    cd contracts/token && cargo test --all-features
+
+# All contract tests
+all-contracts:
+    cd contracts/token && cargo test --all-features
+    cd contracts/trading && cargo test --all-features
+    cd contracts/academy && cargo test --all-features
+    cd contracts/academy-rewards && cargo test --all-features
+    cd contracts/social_rewards && cargo test --all-features
+
+# Workspace-wide testing
+workspace:
+    cargo test --workspace --all-features
+    cargo llvm-cov --workspace --all-features --html
+
+# Help target
+help:
+    @echo "Available targets:"
+    @echo "  test-all         - Run all tests with coverage"
+    @echo "  test-unit        - Run unit tests"
+    @echo "  test-property    - Run property-based tests"
+    @echo "  test-fuzz        - Run fuzzing tests"
+    @echo "  test-edge        - Run edge case tests"
+    @echo "  test-integration - Run integration tests"
+    @echo "  test-comprehensive - Run comprehensive tests"
+    @echo "  coverage         - Generate coverage report"
+    @echo "  check            - Check formatting and linting"
+    @echo "  clean            - Clean build artifacts"
+    @echo "  report           - Generate comprehensive test report"
+    @echo "  quick            - Quick test for development"
+    @echo "  ci               - Simulate CI pipeline"
+    @echo "  help             - Show this help message"

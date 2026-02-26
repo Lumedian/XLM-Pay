@@ -260,17 +260,21 @@ fn test_upgrade_proposal_flow_and_errors() {
     let proposal = client.get_upgrade_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Pending);
 
+    // Advance time past cooling-off period
+    set_timestamp(&env, 1000 + 3601);
+
     client.approve_upgrade(&proposal_id, &approver);
     let duplicate = client.try_approve_upgrade(&proposal_id, &approver);
     assert_eq!(duplicate, Err(Ok(TradeError::Unauthorized)));
     let proposal = client.get_upgrade_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Approved);
 
-    // Execute too early
+    // Execute too early (before timelock expires)
     let execute_err = client.try_execute_upgrade(&proposal_id, &executor);
     assert_eq!(execute_err, Err(Ok(TradeError::Unauthorized)));
 
-    set_timestamp(&env, 1000 + 3601);
+    // Advance time past timelock
+    set_timestamp(&env, 1000 + 3601 + 3600);
     client.execute_upgrade(&proposal_id, &executor);
 
     let proposal = client.get_upgrade_proposal(&proposal_id);
@@ -481,6 +485,9 @@ fn test_governance_approval_emits_event() {
         &3600,
     );
 
+    // Advance time past cooling-off period
+    set_timestamp(&env, 1000 + 3601);
+
     client.approve_upgrade(&proposal_id, &approver);
 
     let events = env.events().all();
@@ -516,8 +523,12 @@ fn test_governance_execution_emits_event() {
         &3600,
     );
 
-    client.approve_upgrade(&proposal_id, &approver);
+    // Advance time past cooling-off period
     set_timestamp(&env, 1000 + 3601);
+    client.approve_upgrade(&proposal_id, &approver);
+
+    // Advance time past timelock
+    set_timestamp(&env, 1000 + 3601 + 3600);
     client.execute_upgrade(&proposal_id, &executor);
 
     let events = env.events().all();

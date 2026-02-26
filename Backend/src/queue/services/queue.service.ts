@@ -77,7 +77,10 @@ export class QueueService {
   /**
    * Get job status and info
    */
-  async getJobInfo(queueName: string, jobId: string | number): Promise<JobInfo | null> {
+  async getJobInfo(
+    queueName: string,
+    jobId: string | number,
+  ): Promise<JobInfo | null> {
     const queue = this.getQueueByName(queueName);
     const job = await queue.getJob(jobId);
 
@@ -96,7 +99,9 @@ export class QueueService {
       attempts: job.attemptsMade,
       maxAttempts: job.opts.attempts || 1,
       data: job.data,
-      result: job.returnvalue ? { success: true, data: job.returnvalue } : undefined,
+      result: job.returnvalue
+        ? { success: true, data: job.returnvalue }
+        : undefined,
       error: job.failedReason || undefined,
       createdAt: new Date(job.timestamp),
       processedAt: job.processedOn ? new Date(job.processedOn) : undefined,
@@ -132,7 +137,9 @@ export class QueueService {
           attempts: job.attemptsMade,
           maxAttempts: job.opts.attempts || 1,
           data: job.data,
-          result: job.returnvalue ? { success: true, data: job.returnvalue } : undefined,
+          result: job.returnvalue
+            ? { success: true, data: job.returnvalue }
+            : undefined,
           error: job.failedReason || undefined,
           createdAt: new Date(job.timestamp),
           processedAt: job.processedOn ? new Date(job.processedOn) : undefined,
@@ -145,7 +152,10 @@ export class QueueService {
   /**
    * Get dead-letter queue (permanently failed jobs)
    */
-  async getDeadLetterQueue(queueName: string, limit: number = 50): Promise<any[]> {
+  async getDeadLetterQueue(
+    queueName: string,
+    limit: number = 50,
+  ): Promise<any[]> {
     const dlqKey = `${this.DLQ_PREFIX}${queueName}`;
     const dlqData = await this.redisService.client.lRange(dlqKey, 0, limit - 1);
     return dlqData.map((item) => {
@@ -160,7 +170,10 @@ export class QueueService {
   /**
    * Requeue a job that previously failed
    */
-  async requeueJob(queueName: string, jobId: string | number): Promise<Job | null> {
+  async requeueJob(
+    queueName: string,
+    jobId: string | number,
+  ): Promise<Job | null> {
     const queue = this.getQueueByName(queueName);
     const job = await queue.getJob(jobId);
 
@@ -183,7 +196,9 @@ export class QueueService {
       backoff: job.opts.backoff,
     });
 
-    this.logger.log(`Job requeued: ${job.name} (original ID: ${jobId}, new ID: ${newJob.id})`);
+    this.logger.log(
+      `Job requeued: ${job.name} (original ID: ${jobId}, new ID: ${newJob.id})`,
+    );
     return newJob;
   }
 
@@ -299,9 +314,7 @@ export class QueueService {
           `Job ${job.id} (${job.name}) moved to DLQ after ${attempts} attempts`,
         );
       } catch (dlqError) {
-        this.logger.error(
-          `Failed to move job to DLQ: ${dlqError.message}`,
-        );
+        this.logger.error(`Failed to move job to DLQ: ${dlqError.message}`);
       }
     }
   }

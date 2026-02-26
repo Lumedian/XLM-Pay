@@ -26,6 +26,10 @@ pub mod topics {
     pub const PROPOSAL_REJECTED: Symbol = symbol_short!("reject");
     pub const PROPOSAL_EXECUTED: Symbol = symbol_short!("execute");
     pub const PROPOSAL_CANCELLED: Symbol = symbol_short!("cancel");
+    pub const PROPOSAL_HALTED: Symbol = symbol_short!("halt");
+    pub const PROPOSAL_RESUMED: Symbol = symbol_short!("resume");
+    pub const APPROVAL_REVOKED: Symbol = symbol_short!("revoke");
+    pub const VALIDATION_FAILED: Symbol = symbol_short!("valfail");
 
     // Social rewards events
     pub const REWARD_ADDED: Symbol = symbol_short!("reward");
@@ -181,6 +185,60 @@ pub struct ProposalCancelledEvent {
     pub timestamp: u64,
 }
 
+/// Event emitted when a proposal is halted
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ProposalHaltedEvent {
+    /// Proposal identifier
+    pub proposal_id: u64,
+    /// Admin who halted
+    pub halted_by: Address,
+    /// Reason for halt
+    pub reason: Symbol,
+    /// Block timestamp
+    pub timestamp: u64,
+}
+
+/// Event emitted when a proposal is resumed
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ProposalResumedEvent {
+    /// Proposal identifier
+    pub proposal_id: u64,
+    /// Admin who resumed
+    pub resumed_by: Address,
+    /// New execution time
+    pub new_execution_time: u64,
+    /// Block timestamp
+    pub timestamp: u64,
+}
+
+/// Event emitted when an approval is revoked
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ApprovalRevokedEvent {
+    /// Proposal identifier
+    pub proposal_id: u64,
+    /// Approver who revoked
+    pub approver: Address,
+    /// Block timestamp
+    pub timestamp: u64,
+}
+
+/// Event emitted when validation fails
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ValidationFailedEvent {
+    /// Proposer address
+    pub proposer: Address,
+    /// Validation error code
+    pub error_code: u32,
+    /// Description of what failed
+    pub reason: Symbol,
+    /// Block timestamp
+    pub timestamp: u64,
+}
+
 // =============================================================================
 // Social Rewards Events
 // =============================================================================
@@ -272,6 +330,26 @@ impl EventEmitter {
     /// Emit a proposal cancelled event
     pub fn proposal_cancelled(env: &Env, event: ProposalCancelledEvent) {
         env.events().publish((topics::PROPOSAL_CANCELLED,), event);
+    }
+
+    /// Emit a proposal halted event
+    pub fn proposal_halted(env: &Env, event: ProposalHaltedEvent) {
+        env.events().publish((topics::PROPOSAL_HALTED,), event);
+    }
+
+    /// Emit a proposal resumed event
+    pub fn proposal_resumed(env: &Env, event: ProposalResumedEvent) {
+        env.events().publish((topics::PROPOSAL_RESUMED,), event);
+    }
+
+    /// Emit an approval revoked event
+    pub fn approval_revoked(env: &Env, event: ApprovalRevokedEvent) {
+        env.events().publish((topics::APPROVAL_REVOKED,), event);
+    }
+
+    /// Emit a validation failed event
+    pub fn validation_failed(env: &Env, event: ValidationFailedEvent) {
+        env.events().publish((topics::VALIDATION_FAILED,), event);
     }
 
     /// Emit a reward added event

@@ -5,7 +5,6 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 
-
 // Entities
 import { User } from './entities/user.entity';
 import { WalletBinding } from './entities/wallet-binding.entity';
@@ -32,9 +31,9 @@ import { RolesGuard } from './guards/roles.guard';
 // Controllers
 import { AuthController } from './controllers/auth.controller';
 
-// Import Redis Module
 import { RedisModule } from '../redis/redis.module';
 import { AuditModule } from '../audit/audit.module';
+import { ThrottleModule } from '../throttle/throttle.module';
 
 @Module({
   imports: [
@@ -48,7 +47,10 @@ import { AuditModule } from '../audit/audit.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get('JWT_SECRET', 'default-secret-change-in-production'),
+        secret: configService.get(
+          'JWT_SECRET',
+          'default-secret-change-in-production',
+        ),
         signOptions: {
           expiresIn: configService.get('JWT_ACCESS_EXPIRATION', '15m'),
         },
@@ -60,6 +62,7 @@ import { AuditModule } from '../audit/audit.module';
     RedisModule,
     ScheduleModule.forRoot(),
     AuditModule,
+    ThrottleModule,
   ],
   controllers: [AuthController],
   providers: [
@@ -69,10 +72,10 @@ import { AuditModule } from '../audit/audit.module';
     JwtAuthService,
     ApiTokenService,
     RateLimitService,
-    
+
     // Strategies
     JwtStrategy,
-    
+
     // Guards
     JwtAuthGuard,
     ApiTokenGuard,
@@ -86,6 +89,7 @@ import { AuditModule } from '../audit/audit.module';
     JwtAuthGuard,
     ApiTokenGuard,
     RolesGuard,
+    TypeOrmModule,
   ],
 })
 export class AuthModule {}

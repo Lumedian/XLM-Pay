@@ -4,7 +4,15 @@ import { ProcessTtsProcessor } from './process-tts.processor';
 describe('ProcessTtsProcessor', () => {
   let processor: ProcessTtsProcessor;
 
-  const mockJob = {
+  const createMockJob = (
+    overrides: Partial<{
+      text: string;
+      voiceId: string;
+      language: string;
+      speed: number;
+      sessionId: string;
+    }> = {},
+  ) => ({
     id: '123',
     data: {
       text: 'Hello, this is a test',
@@ -12,9 +20,10 @@ describe('ProcessTtsProcessor', () => {
       language: 'en',
       speed: 1.0,
       sessionId: 'session-123',
+      ...overrides,
     },
     progress: jest.fn(),
-  };
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -26,7 +35,8 @@ describe('ProcessTtsProcessor', () => {
 
   describe('handleProcessTts', () => {
     it('should successfully process TTS', async () => {
-      const result = await processor.handleProcessTts(mockJob as any);
+      const job = createMockJob();
+      const result = await processor.handleProcessTts(job as any);
 
       expect(result.success).toBe(true);
       expect(result.data).toHaveProperty('audioUrl');
@@ -35,68 +45,61 @@ describe('ProcessTtsProcessor', () => {
     });
 
     it('should update progress', async () => {
-      await processor.handleProcessTts(mockJob as any);
+      const job = createMockJob();
+      await processor.handleProcessTts(job as any);
 
-      expect(mockJob.progress).toHaveBeenCalledWith(10);
-      expect(mockJob.progress).toHaveBeenCalledWith(30);
-      expect(mockJob.progress).toHaveBeenCalledWith(50);
-      expect(mockJob.progress).toHaveBeenCalledWith(80);
-      expect(mockJob.progress).toHaveBeenCalledWith(100);
+      expect(job.progress).toHaveBeenCalledWith(10);
+      expect(job.progress).toHaveBeenCalledWith(30);
+      expect(job.progress).toHaveBeenCalledWith(50);
+      expect(job.progress).toHaveBeenCalledWith(80);
+      expect(job.progress).toHaveBeenCalledWith(100);
     });
 
     it('should throw error if text missing', async () => {
-      mockJob.data = { 
-        text: '', 
-        voiceId: 'voice-001',
-        language: 'en',
-        speed: 1.0,
-        sessionId: 'session-123'
-      };
+      const job = createMockJob({
+        text: '',
+      });
 
-      await expect(processor.handleProcessTts(mockJob as any)).rejects.toThrow();
+      await expect(processor.handleProcessTts(job as any)).rejects.toThrow();
     });
 
     it('should throw error if voiceId missing', async () => {
-      mockJob.data = { 
-        text: 'Hello', 
+      const job = createMockJob({
+        text: 'Hello',
         voiceId: '',
-        language: 'en',
-        speed: 1.0,
-        sessionId: 'session-123'
-      };
+      });
 
-      await expect(processor.handleProcessTts(mockJob as any)).rejects.toThrow();
+      await expect(processor.handleProcessTts(job as any)).rejects.toThrow();
     });
 
     it('should throw error if text exceeds limit', async () => {
-      mockJob.data = {
+      const job = createMockJob({
         text: 'a'.repeat(5001),
-        voiceId: 'voice-001',
-        language: 'en',
-        speed: 1.0,
-        sessionId: 'session-123'
-      };
+      });
 
-      await expect(processor.handleProcessTts(mockJob as any)).rejects.toThrow(
+      await expect(processor.handleProcessTts(job as any)).rejects.toThrow(
         'Text exceeds maximum length',
       );
     });
 
     it('should include sessionId in result if provided', async () => {
-      const result = await processor.handleProcessTts(mockJob as any);
+      const job = createMockJob();
+      const result = await processor.handleProcessTts(job as any);
 
       expect(result.data.sessionId).toBe('session-123');
     });
 
     it('should include language and speed in result', async () => {
-      const result = await processor.handleProcessTts(mockJob as any);
+      const job = createMockJob();
+      const result = await processor.handleProcessTts(job as any);
 
       expect(result.data.language).toBe('en');
       expect(result.data.speed).toBe(1.0);
     });
 
     it('should generate audioUrl with job id', async () => {
-      const result = await processor.handleProcessTts(mockJob as any);
+      const job = createMockJob();
+      const result = await processor.handleProcessTts(job as any);
 
       expect(result.data.audioUrl).toContain('123');
       expect(result.data.audioUrl).toContain('audio');

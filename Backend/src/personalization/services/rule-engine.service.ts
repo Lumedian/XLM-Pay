@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { PersonalizationRule, RuleStatus } from '../entities/personalization-rule.entity';
+import {
+  PersonalizationRule,
+  RuleStatus,
+} from '../entities/personalization-rule.entity';
 import { UserEvent } from '../entities/user-event.entity';
 
 type EvaluationContext = {
@@ -43,10 +46,16 @@ export class RuleEngineService {
   async listRules(tenantId?: string | null): Promise<PersonalizationRule[]> {
     const where: any = {};
     if (tenantId) where.tenantId = tenantId;
-    return this.ruleRepo.find({ where, order: { priority: 'DESC', createdAt: 'ASC' } });
+    return this.ruleRepo.find({
+      where,
+      order: { priority: 'DESC', createdAt: 'ASC' },
+    });
   }
 
-  async updateRule(id: string, patch: Partial<PersonalizationRule>): Promise<PersonalizationRule | null> {
+  async updateRule(
+    id: string,
+    patch: Partial<PersonalizationRule>,
+  ): Promise<PersonalizationRule | null> {
     const r = await this.ruleRepo.findOne({ where: { id } });
     if (!r) return null;
     Object.assign(r, patch);
@@ -63,12 +72,16 @@ export class RuleEngineService {
     for (const rule of rules) {
       if (rule.status !== RuleStatus.ACTIVE) continue;
       const ok = await this.evaluateConditions(rule.conditions, context);
-      if (ok) return Array.isArray(rule.actions) ? rule.actions : [rule.actions];
+      if (ok)
+        return Array.isArray(rule.actions) ? rule.actions : [rule.actions];
     }
     return [];
-    }
+  }
 
-  private async evaluateConditions(conditions: any, context: EvaluationContext): Promise<boolean> {
+  private async evaluateConditions(
+    conditions: any,
+    context: EvaluationContext,
+  ): Promise<boolean> {
     if (!conditions) return false;
     if (Array.isArray(conditions.all)) {
       for (const c of conditions.all) {
@@ -86,7 +99,10 @@ export class RuleEngineService {
     return this.evaluateCondition(conditions, context);
   }
 
-  private async evaluateCondition(cond: any, context: EvaluationContext): Promise<boolean> {
+  private async evaluateCondition(
+    cond: any,
+    context: EvaluationContext,
+  ): Promise<boolean> {
     if (!cond || typeof cond !== 'object') return false;
     if (cond.type === 'attribute') {
       const v = context.attributes?.[cond.key];
@@ -94,14 +110,20 @@ export class RuleEngineService {
     }
     if (cond.type === 'event_frequency') {
       const end = new Date();
-      const start = new Date(end.getTime() - (cond.days ?? 30) * 24 * 60 * 60 * 1000);
+      const start = new Date(
+        end.getTime() - (cond.days ?? 30) * 24 * 60 * 60 * 1000,
+      );
       const qb = this.eventRepo
         .createQueryBuilder('e')
         .where('e.timestamp BETWEEN :start AND :end', { start, end });
-      if (context.tenantId) qb.andWhere('e.tenantId = :tenantId', { tenantId: context.tenantId });
-      if (context.userId) qb.andWhere('e.userId = :userId', { userId: context.userId });
-      if (cond.eventType) qb.andWhere('e.eventType = :eventType', { eventType: cond.eventType });
-      if (cond.itemId) qb.andWhere('e.itemId = :itemId', { itemId: cond.itemId });
+      if (context.tenantId)
+        qb.andWhere('e.tenantId = :tenantId', { tenantId: context.tenantId });
+      if (context.userId)
+        qb.andWhere('e.userId = :userId', { userId: context.userId });
+      if (cond.eventType)
+        qb.andWhere('e.eventType = :eventType', { eventType: cond.eventType });
+      if (cond.itemId)
+        qb.andWhere('e.itemId = :itemId', { itemId: cond.itemId });
       const count = await qb.getCount();
       return this.compare(count, cond.operator ?? '>=', cond.threshold ?? 1);
     }

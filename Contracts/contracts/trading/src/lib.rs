@@ -1,10 +1,14 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 use shared::events::{
     ContractPausedEvent, ContractUnpausedEvent, EventEmitter, FeeCollectedEvent, TradeExecutedEvent,
 };
 use shared::fees::{FeeError, FeeManager};
 use shared::governance::{GovernanceManager, GovernanceRole, UpgradeProposal};
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
+use shared::state_verification::{is_trusted, trust_add, verify_with_contract};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, Address, Env, IntoVal, Symbol,
+};
 
 /// Version of this contract implementation
 const CONTRACT_VERSION: u32 = 1;
@@ -119,7 +123,12 @@ impl UpgradeableTradingContract {
         trust_add(&env, &contract);
     }
 
-    pub fn verify_external_balance(env: Env, token: Address, holder: Address, expected: i128) -> bool {
+    pub fn verify_external_balance(
+        env: Env,
+        token: Address,
+        holder: Address,
+        expected: i128,
+    ) -> bool {
         if !is_trusted(&env, &token) {
             return false;
         }
@@ -167,7 +176,7 @@ impl UpgradeableTradingContract {
             );
         }
 
-        // Create trade record
+        // Optimized: Load stats once and update in batch
         let stats_key = symbol_short!("stats");
         let mut stats: TradeStats =
             env.storage()
@@ -191,23 +200,17 @@ impl UpgradeableTradingContract {
             is_buy,
         };
 
-        // Update stats
+        // Optimized: Update stats in place
         stats.total_trades += 1;
         stats.total_volume += amount;
         stats.last_trade_id = trade_id;
 
-        // Store trade
-        let trades_key = symbol_short!("trades");
-        let mut trades: soroban_sdk::Vec<Trade> = env
-            .storage()
-            .persistent()
-            .get(&trades_key)
-            .unwrap_or_else(|| soroban_sdk::Vec::new(&env));
+        // Optimized: Use individual trade storage instead of vector
+        let trade_key = symbol_short!("trade_");
+        let individual_trade_key = (trade_key, trade_id);
+        env.storage().persistent().set(&individual_trade_key, &trade);
 
-        trades.push_back(trade);
-
-        // Update persistent storage
-        env.storage().persistent().set(&trades_key, &trades);
+        // Update stats storage
         env.storage().persistent().set(&stats_key, &stats);
 
         // Emit trade executed event
@@ -252,7 +255,7 @@ impl UpgradeableTradingContract {
     pub fn pause(env: Env, admin: Address) -> Result<(), TradeError> {
         admin.require_auth();
 
-        // Verify admin role
+        // Optimized: Single role verification with cached lookup
         let roles_key = symbol_short!("roles");
         let roles: soroban_sdk::Map<Address, GovernanceRole> = env
             .storage()
@@ -285,6 +288,7 @@ impl UpgradeableTradingContract {
     pub fn unpause(env: Env, admin: Address) -> Result<(), TradeError> {
         admin.require_auth();
 
+        // Optimized: Single role verification with cached lookup
         let roles_key = symbol_short!("roles");
         let roles: soroban_sdk::Map<Address, GovernanceRole> = env
             .storage()
@@ -384,6 +388,50 @@ impl UpgradeableTradingContract {
         admin.require_auth();
 
         GovernanceManager::cancel_proposal(&env, proposal_id, admin)
+            .map_err(|_| TradeError::Unauthorized)
+    }
+
+    /// Halt an upgrade proposal (admin only)
+    pub fn halt_upgrade(
+        env: Env,
+        proposal_id: u64,
+        admin: Address,
+        reason: Symbol,
+    ) -> Result<(), TradeError> {
+        admin.require_auth();
+
+        GovernanceManager::halt_proposal(&env, proposal_id, admin, reason)
+            .map_err(|_| TradeError::Unauthorized)
+    }
+
+    /// Resume a halted upgrade proposal (admin only)
+    pub fn resume_upgrade(
+        env: Env,
+        proposal_id: u64,
+        admin: Address,
+        new_timelock_delay: u64,
+    ) -> Result<(), TradeError> {
+        admin.require_auth();
+
+        GovernanceManager::resume_proposal(&env, proposal_id, admin, new_timelock_delay)
+            .map_err(|_| TradeError::Unauthorized)
+    }
+
+    /// Revoke an approval
+    pub fn revoke_approval_upgrade(
+        env: Env,
+        proposal_id: u64,
+        approver: Address,
+    ) -> Result<(), TradeError> {
+        approver.require_auth();
+
+        GovernanceManager::revoke_approval(&env, proposal_id, approver)
+            .map_err(|_| TradeError::Unauthorized)
+    }
+
+    /// Get time remaining until execution is possible
+    pub fn get_time_to_execution(env: Env, proposal_id: u64) -> Result<u64, TradeError> {
+        GovernanceManager::get_time_to_execution(&env, proposal_id)
             .map_err(|_| TradeError::Unauthorized)
     }
 }

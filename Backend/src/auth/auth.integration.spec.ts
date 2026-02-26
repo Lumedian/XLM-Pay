@@ -4,7 +4,7 @@ import request from 'supertest';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth.module';
-import { RedisModule } from '../redis/redis.module';
+import { RedisService } from '../redis/redis.service';
 import { Keypair } from '@stellar/stellar-sdk';
 import * as nacl from 'tweetnacl';
 
@@ -18,6 +18,20 @@ describe('Auth Integration Tests (e2e)', () => {
     testKeypair = Keypair.random();
     testKeypair2 = Keypair.random();
 
+    const mockRedisService = {
+      client: {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue('OK'),
+        incr: jest.fn().mockResolvedValue(1),
+        expire: jest.fn().mockResolvedValue(1),
+        eval: jest.fn().mockResolvedValue([1, 60]),
+        del: jest.fn().mockResolvedValue(1),
+        keys: jest.fn().mockResolvedValue([]),
+        connect: jest.fn().mockResolvedValue(undefined),
+        quit: jest.fn().mockResolvedValue(undefined),
+      },
+    };
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
@@ -27,13 +41,15 @@ describe('Auth Integration Tests (e2e)', () => {
         TypeOrmModule.forRoot({
           type: 'sqlite',
           database: ':memory:',
-          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          entities: [__dirname + '/../**/*.entity{.ts,.js}'],
           synchronize: true,
         }),
-        RedisModule,
         AuthModule,
       ],
-    }).compile();
+    })
+      .overrideProvider(RedisService)
+      .useValue(mockRedisService)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(
@@ -47,7 +63,9 @@ describe('Auth Integration Tests (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   describe('Successful Login Flow', () => {
@@ -110,7 +128,7 @@ describe('Auth Integration Tests (e2e)', () => {
 
       expect(response.body).toHaveProperty('accessToken');
       expect(response.body).toHaveProperty('refreshToken');
-      
+
       // New tokens should be different
       expect(response.body.accessToken).not.toBe(accessToken);
       expect(response.body.refreshToken).not.toBe(refreshToken);
@@ -334,16 +352,12 @@ describe('Auth Integration Tests (e2e)', () => {
       const requests: Array<Promise<any>> = [];
       for (let i = 0; i < 6; i++) {
         requests.push(
-          request(app.getHttpServer())
-            .post('/auth/nonce')
-            .send({ publicKey }),
+          request(app.getHttpServer()).post('/auth/nonce').send({ publicKey }),
         );
       }
 
       const responses = await Promise.all(requests);
-      const tooManyRequests = responses.filter(
-        (r) => r.status === 429,
-      );
+      const tooManyRequests = responses.filter((r) => r.status === 429);
 
       expect(tooManyRequests.length).toBeGreaterThan(0);
     });

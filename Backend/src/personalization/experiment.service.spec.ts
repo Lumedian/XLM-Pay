@@ -33,9 +33,22 @@ describe('ExperimentService', () => {
 
     const savedAssignments: ExperimentAssignment[] = [];
     assignRepo = {
-      findOne: jest.fn().mockImplementation(async ({ where }: any) => savedAssignments.find(a => a.experimentKey === where.experimentKey && a.userId === where.userId) || null),
+      findOne: jest
+        .fn()
+        .mockImplementation(
+          async ({ where }: any) =>
+            savedAssignments.find(
+              (a) =>
+                a.experimentKey === where.experimentKey &&
+                a.userId === where.userId,
+            ) || null,
+        ),
       save: jest.fn().mockImplementation(async (a: any) => {
-        const assignment = { ...a, id: 'a1', assignedAt: new Date() } as ExperimentAssignment;
+        const assignment = {
+          ...a,
+          id: 'a1',
+          assignedAt: new Date(),
+        } as ExperimentAssignment;
         savedAssignments.push(assignment);
         return assignment;
       }),
@@ -48,17 +61,34 @@ describe('ExperimentService', () => {
       groupBy: jest.fn().mockReturnThis(),
       setParameters: jest.fn().mockReturnThis(),
       getRawMany: jest.fn().mockResolvedValue([
-        { variant: 'control', impressions: '100', clicks: '20', purchases: '5' },
-        { variant: 'variant', impressions: '120', clicks: '30', purchases: '9' },
+        {
+          variant: 'control',
+          impressions: '100',
+          clicks: '20',
+          purchases: '5',
+        },
+        {
+          variant: 'variant',
+          impressions: '120',
+          clicks: '30',
+          purchases: '9',
+        },
       ]),
     };
     eventRepo = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
 
-    service = new ExperimentService(expRepo as any, assignRepo as any, eventRepo as any);
+    service = new ExperimentService(
+      expRepo as any,
+      assignRepo as any,
+      eventRepo,
+    );
   });
 
   it('assigns a deterministic variant to a user', async () => {
-    const assignment = await service.assignVariant({ experimentKey: 'homepage_test', userId: 'user-123' });
+    const assignment = await service.assignVariant({
+      experimentKey: 'homepage_test',
+      userId: 'user-123',
+    });
     expect(assignment).toBeTruthy();
     expect(['control', 'variant']).toContain(assignment!.variant);
   });
@@ -68,7 +98,7 @@ describe('ExperimentService', () => {
     expect(report).toBeTruthy();
     expect(report!.experimentKey).toBe('homepage_test');
     expect(report!.variants.length).toBe(2);
-    const control = report!.variants.find(v => v.name === 'control')!;
+    const control = report!.variants.find((v) => v.name === 'control')!;
     expect(control.impressions).toBe(100);
     expect(control.clicks).toBe(20);
     expect(control.purchases).toBe(5);
