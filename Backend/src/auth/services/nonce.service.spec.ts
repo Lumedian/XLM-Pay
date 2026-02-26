@@ -66,17 +66,20 @@ describe('NonceService', () => {
     it('should set expiration 5 minutes in the future', async () => {
       const publicKey = 'GABC123TEST';
       const beforeTime = new Date();
-      beforeTime.setMinutes(beforeTime.getMinutes() + 4, 30);
 
       mockRepository.create.mockImplementation((data) => data);
       mockRepository.save.mockImplementation((data) => Promise.resolve(data));
 
       const result = await service.generateNonce(publicKey);
       const afterTime = new Date();
-      afterTime.setMinutes(afterTime.getMinutes() + 5, 30);
 
-      expect(result.expiresAt.getTime()).toBeGreaterThan(beforeTime.getTime());
-      expect(result.expiresAt.getTime()).toBeLessThanOrEqual(afterTime.getTime());
+      // Expiration should be approximately 5 minutes from now
+      // Allow for test execution time by checking it's between 4.9 and 5.1 minutes
+      const minExpiration = new Date(beforeTime.getTime() + 4.9 * 60 * 1000);
+      const maxExpiration = new Date(afterTime.getTime() + 5.1 * 60 * 1000);
+
+      expect(result.expiresAt.getTime()).toBeGreaterThanOrEqual(minExpiration.getTime());
+      expect(result.expiresAt.getTime()).toBeLessThanOrEqual(maxExpiration.getTime());
     });
   });
 
