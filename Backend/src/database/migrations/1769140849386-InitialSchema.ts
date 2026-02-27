@@ -5,6 +5,12 @@ export class InitialSchema1769140849386 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+    
+    // Create users table first
+    await queryRunner.query(
+      `CREATE TABLE "users" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "email" character varying, "username" character varying, "role" character varying NOT NULL DEFAULT 'user', "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "isActive" boolean NOT NULL DEFAULT true, CONSTRAINT "UQ_97672ac88f789774dd47f7c8be3" UNIQUE ("email"), CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id"))`,
+    );
+    
     await queryRunner.query(
       `CREATE TYPE "public"."workflows_type_enum" AS ENUM('contract_deployment', 'trade_execution', 'ai_job_chain', 'indexing_verification', 'portfolio_update', 'reward_grant')`,
     );
@@ -144,5 +150,6 @@ export class InitialSchema1769140849386 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE "workflows"`);
     await queryRunner.query(`DROP TYPE "public"."workflows_state_enum"`);
     await queryRunner.query(`DROP TYPE "public"."workflows_type_enum"`);
+    await queryRunner.query(`DROP TABLE "users"`);
   }
 }
