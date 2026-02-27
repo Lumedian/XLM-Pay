@@ -1,8 +1,11 @@
-import { Controller, Get, Post } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { Roles } from '../../decorators/roles.decorator';
 import { Role } from '../../auth/roles.enum';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../guards/roles.guard';
 
 @Controller('admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class AdminController {
   @Get('audit-logs')
   @Roles(Role.ADMIN, Role.SUPERADMIN)

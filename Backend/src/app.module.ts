@@ -21,6 +21,7 @@ import { MarketDataModule } from './market-data/market-data.module';
 // import { AnalyticsModule } from './analytics/analytics.module';
 import { PersonalizationModule } from './personalization/personalization.module';
 import { GraphqlModule } from './graphql/graphql.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 import { RolesGuard } from './guards/roles.guard';
 
@@ -127,6 +128,7 @@ import { ExperimentAssignment } from './personalization/entities/experiment-assi
     QueueModule,
     MarketDataModule,
     AuditModule,
+    AdminModule,
     // GdprModule,
     ThrottleModule,
     ObservabilityModule,
