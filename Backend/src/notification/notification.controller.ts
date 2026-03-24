@@ -30,6 +30,8 @@ export class NotificationController {
         @Body() settings: {
             emailEnabled?: boolean;
             pushEnabled?: boolean;
+            smsEnabled?: boolean;
+            websocketEnabled?: boolean;
             notifyContributions?: boolean;
             notifyMilestones?: boolean;
             notifyDeadlines?: boolean;
