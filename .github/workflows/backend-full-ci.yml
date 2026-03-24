@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Prisma client
+        run: npm run db:generate
+
       - name: Run TypeScript type checking
         run: |
           echo "Running TypeScript type checking..."
@@ -59,6 +62,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
 
       - name: Build project
         run: |
@@ -112,6 +118,9 @@ jobs:
             echo "✅ Dependencies installed successfully!"
           fi
 
+      - name: Generate Prisma client
+        run: npm run db:generate
+
       - name: Validate dependency integrity
         run: |
           echo "Validating dependency integrity..."
@@ -148,6 +157,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Prisma client
+        run: npm run db:generate
+
       - name: Build project
         run: npm run build
 
@@ -165,7 +177,7 @@ jobs:
           fi
           
           # Start the application in the background
-          timeout 30s node dist/main.js &
+          timeout 30s node dist/src/main.js &
           APP_PID=$!
           
           # Wait for the app to attempt startup

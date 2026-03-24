@@ -24,7 +24,7 @@ export class TenantOnboardingService {
           slug,
           name: dto.name,
           plan: dto.plan || 'standard',
-          metadata: dto.metadata,
+          metadata: dto.metadata as any,
         },
       });
 
@@ -35,7 +35,7 @@ export class TenantOnboardingService {
           billingEmail: dto.billingEmail,
           locale: dto.locale,
           timeZone: dto.timeZone,
-          settings: dto.settings || {},
+          settings: (dto.settings || {}) as any,
           onboardingCompletedAt: new Date(),
         },
       });

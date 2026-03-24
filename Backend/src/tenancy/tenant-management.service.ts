@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
-import { Prisma, Tenant, TenantFeatureFlag } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { TenantConfigurationDto } from './dto/tenant-configuration.dto';
 import { SetTenantFeatureFlagDto } from './dto/set-tenant-feature-flag.dto';
@@ -13,10 +12,14 @@ export class TenantManagementService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    if (!process.env.DATABASE_URL) {
+      return;
+    }
+
     await this.ensureDefaultTenant();
   }
 
-  async ensureDefaultTenant(): Promise<Tenant> {
+  async ensureDefaultTenant() {
     return this.prisma.tenant.upsert({
       where: { slug: process.env.DEFAULT_TENANT_SLUG || 'platform' },
       update: {
@@ -41,7 +44,7 @@ export class TenantManagementService implements OnModuleInit {
     });
   }
 
-  async getCurrentTenant(): Promise<Tenant> {
+  async getCurrentTenant() {
     const identifier =
       this.tenantContextService.getTenantIdentifier() ||
       process.env.DEFAULT_TENANT_SLUG ||
@@ -60,7 +63,7 @@ export class TenantManagementService implements OnModuleInit {
     return tenant;
   }
 
-  async getTenantById(tenantId: string): Promise<Tenant> {
+  async getTenantById(tenantId: string) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
     });
@@ -72,9 +75,7 @@ export class TenantManagementService implements OnModuleInit {
     return tenant;
   }
 
-  async getTenantOverview(): Promise<Prisma.TenantGetPayload<{
-    include: { configuration: true; featureFlags: true };
-  }>> {
+  async getTenantOverview() {
     const tenant = await this.getCurrentTenant();
 
     return this.prisma.tenant.findUniqueOrThrow({
@@ -91,16 +92,22 @@ export class TenantManagementService implements OnModuleInit {
 
     return this.prisma.tenantConfiguration.upsert({
       where: { tenantId: tenant.id },
-      update: dto,
-      create: {
-        tenantId: tenant.id,
+      update: {
         ...dto,
+        settings: dto.settings as any,
+      },
+      create: {
+        tenant: {
+          connect: { id: tenant.id },
+        },
+        ...dto,
+        settings: dto.settings as any,
         onboardingCompletedAt: new Date(),
       },
     });
   }
 
-  async setCurrentTenantFeatureFlag(dto: SetTenantFeatureFlagDto): Promise<TenantFeatureFlag> {
+  async setCurrentTenantFeatureFlag(dto: SetTenantFeatureFlagDto) {
     const tenant = await this.getCurrentTenant();
 
     return this.prisma.tenantFeatureFlag.upsert({

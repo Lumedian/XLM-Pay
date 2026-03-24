@@ -1,8 +1,8 @@
-import { UsageMetric } from '@prisma/client';
-import { IsEnum, IsInt, IsObject, IsOptional, Min } from 'class-validator';
+import { IsIn, IsInt, IsObject, IsOptional, Min } from 'class-validator';
+import { USAGE_METRICS, UsageMetric } from '../tenancy.types';
 
 export class RecordTenantUsageDto {
-  @IsEnum(UsageMetric)
+  @IsIn(USAGE_METRICS)
   metric: UsageMetric;
 
   @IsOptional()

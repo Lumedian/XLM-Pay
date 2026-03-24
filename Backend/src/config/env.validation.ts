@@ -41,8 +41,16 @@ class EnvironmentVariables {
   @IsString()
   JWT_SECRET: string;
 
-  @IsNumber()
-  JWT_EXPIRATION: number;
+  @IsString()
+  JWT_EXPIRATION: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_REFRESH_SECRET?: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_REFRESH_EXPIRATION?: string;
 
   @IsString()
   STELLAR_NETWORK: string;

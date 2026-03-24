@@ -3,6 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { TenantManagementService } from '../tenancy/tenant-management.service';
+import { Role } from '../tenancy/tenancy.types';
 
 @Injectable()
 export class AuthService {
@@ -10,18 +12,22 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private tenantManagementService: TenantManagementService,
   ) {}
 
   async login(walletAddress: string) {
-    // For this implementation, we simply find or mock-create a user based on the wallet address.
-    // In production, you would verify a wallet signature here.
-    let user = await this.prisma.user.findUnique({
-      where: { walletAddress },
+    const tenant = await this.tenantManagementService.getCurrentTenant();
+    let user = await this.prisma.user.findFirst({
+      where: {
+        tenantId: tenant.id,
+        walletAddress,
+      },
     });
 
     if (!user) {
       user = await this.prisma.user.create({
         data: {
+          tenantId: tenant.id,
           walletAddress,
           roles: ['USER'],
         },
@@ -29,7 +35,7 @@ export class AuthService {
     }
 
     const tokens = await this.getTokens(user.id, walletAddress, user.roles);
-    await this.updateRefreshToken(user.id, tokens.refreshToken);
+    await this.updateRefreshToken(user.id, tokens.refreshToken, tenant.id);
 
     return {
       ...tokens,
@@ -42,8 +48,8 @@ export class AuthService {
   }
 
   async logout(userId: string, accessToken?: string) {
+    const tenant = await this.tenantManagementService.getCurrentTenant();
     if (accessToken) {
-      // Decode to get expiration and blacklist it
       try {
         const decoded: any = this.jwtService.decode(accessToken);
         if (decoded && decoded.exp) {
@@ -55,15 +61,14 @@ export class AuthService {
             },
           });
         }
-      } catch (e) {
-        // Ignored
+      } catch {
       }
     }
 
-    // Clear the refresh token
     await this.prisma.user.updateMany({
       where: {
         id: userId,
+        tenantId: tenant.id,
         hashedRefreshToken: {
           not: null,
         },
@@ -75,13 +80,17 @@ export class AuthService {
   }
 
   async refreshTokens(refreshToken: string) {
+    const tenant = await this.tenantManagementService.getCurrentTenant();
     try {
       const decoded = this.jwtService.verify(refreshToken, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET', 'super_refresh_secret_key_for_development'),
       });
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: decoded.sub },
+      const user = await this.prisma.user.findFirst({
+        where: {
+          id: decoded.sub,
+          tenantId: tenant.id,
+        },
       });
 
       if (!user || !user.hashedRefreshToken) {
@@ -94,7 +103,7 @@ export class AuthService {
       }
 
       const tokens = await this.getTokens(user.id, user.walletAddress, user.roles);
-      await this.updateRefreshToken(user.id, tokens.refreshToken);
+      await this.updateRefreshToken(user.id, tokens.refreshToken, tenant.id);
 
       return tokens;
     } catch {
@@ -109,11 +118,12 @@ export class AuthService {
     return !!isBlacklisted;
   }
 
-  private async updateRefreshToken(userId: string, refreshToken: string) {
+  private async updateRefreshToken(userId: string, refreshToken: string, tenantId: string) {
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-    await this.prisma.user.update({
+    await this.prisma.user.updateMany({
       where: {
         id: userId,
+        tenantId,
       },
       data: {
         hashedRefreshToken,
@@ -121,7 +131,7 @@ export class AuthService {
     });
   }
 
-  private async getTokens(userId: string, walletAddress: string, roles: string[]) {
+  private async getTokens(userId: string, walletAddress: string, roles: Role[]) {
     const payload = {
       sub: userId,
       walletAddress,

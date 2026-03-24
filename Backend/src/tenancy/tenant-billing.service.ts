@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, UsageMetric } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { TENANT_PRICING_CENTS } from './constants/tenant-pricing.constants';
 import { DateRangeQueryDto } from './dto/date-range-query.dto';
 import { TenantManagementService } from './tenant-management.service';
+import { USAGE_METRICS } from './tenancy.types';
 import { resolveDateRange } from './tenant.utils';
 
 @Injectable()
@@ -53,18 +53,18 @@ export class TenantBillingService {
       },
       update: {
         amountCents,
-        breakdown: breakdown as Prisma.InputJsonValue,
+        breakdown: breakdown as any,
       },
       create: {
         tenantId: tenant.id,
         periodStart: range.from,
         periodEnd: range.to,
         amountCents,
-        breakdown: breakdown as Prisma.InputJsonValue,
+        breakdown: breakdown as any,
       },
     });
 
-    const metricTotals = Object.values(UsageMetric).reduce<Record<string, number>>((acc, metric) => {
+    const metricTotals = USAGE_METRICS.reduce<Record<string, number>>((acc, metric) => {
       acc[metric] = 0;
       return acc;
     }, {});

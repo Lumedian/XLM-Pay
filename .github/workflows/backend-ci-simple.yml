@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Prisma client
+        run: npm run db:generate
+
       - name: Build check
         if: matrix.check == 'build'
         run: |
@@ -57,7 +60,7 @@ jobs:
           npm run build
           
           # Test if the application can start without crashing
-          timeout 30s node dist/main.js &
+          timeout 30s node dist/src/main.js &
           APP_PID=$!
           
           # Wait a moment for the app to start

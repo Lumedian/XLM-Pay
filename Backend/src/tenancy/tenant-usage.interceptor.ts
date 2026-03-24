@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
 import { Request } from 'express';
-import { UsageMetric } from '@prisma/client';
 import { TenantManagementService } from './tenant-management.service';
 import { TenantUsageService } from './tenant-usage.service';
 
@@ -45,7 +44,7 @@ export class TenantUsageInterceptor implements NestInterceptor {
       .getCurrentTenant()
       .then((tenant) =>
         this.tenantUsageService.recordUsageForTenantId(tenant.id, {
-          metric: UsageMetric.API_REQUEST,
+          metric: 'API_REQUEST',
           quantity: 1,
           metadata: {
             method: request.method,

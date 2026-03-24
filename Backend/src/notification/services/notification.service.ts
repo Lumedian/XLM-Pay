@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { UsageMetric } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { EmailService } from './email.service';
 import { WebPushService } from './web-push.service';
@@ -66,7 +65,7 @@ export class NotificationService {
       },
     });
     await this.tenantUsageService.recordUsageForTenantId(tenant.id, {
-      metric: UsageMetric.NOTIFICATION_SENT,
+      metric: 'NOTIFICATION_SENT',
       quantity: 1,
       metadata: { type, title },
     });

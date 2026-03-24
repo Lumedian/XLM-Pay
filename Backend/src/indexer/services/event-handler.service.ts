@@ -104,7 +104,7 @@ class ProjectCreatedHandler implements IEventHandler {
   ) {}
 
   validate(event: ParsedContractEvent): boolean {
-    const data = event.data as ProjectCreatedEvent;
+    const data = event.data as unknown as ProjectCreatedEvent;
     return !!(
       data.projectId !== undefined &&
       data.creator &&
@@ -115,7 +115,7 @@ class ProjectCreatedHandler implements IEventHandler {
   }
 
   async handle(event: ParsedContractEvent): Promise<void> {
-    const data = event.data as ProjectCreatedEvent;
+    const data = event.data as unknown as ProjectCreatedEvent;
     const tenant = await this.tenantManagementService.getCurrentTenant();
 
     this.logger.log(`Processing PROJECT_CREATED: Project ${data.projectId} by ${data.creator}`);
@@ -175,12 +175,12 @@ class ContributionMadeHandler implements IEventHandler {
   ) {}
 
   validate(event: ParsedContractEvent): boolean {
-    const data = event.data as ContributionMadeEvent;
+    const data = event.data as unknown as ContributionMadeEvent;
     return !!(data.projectId !== undefined && data.contributor && data.amount);
   }
 
   async handle(event: ParsedContractEvent): Promise<void> {
-    const data = event.data as ContributionMadeEvent;
+    const data = event.data as unknown as ContributionMadeEvent;
     const tenant = await this.tenantManagementService.getCurrentTenant();
 
     this.logger.log(
@@ -272,12 +272,12 @@ class MilestoneApprovedHandler implements IEventHandler {
   ) {}
 
   validate(event: ParsedContractEvent): boolean {
-    const data = event.data as MilestoneApprovedEvent;
+    const data = event.data as unknown as MilestoneApprovedEvent;
     return !!(data.projectId !== undefined && data.milestoneId !== undefined);
   }
 
   async handle(event: ParsedContractEvent): Promise<void> {
-    const data = event.data as MilestoneApprovedEvent;
+    const data = event.data as unknown as MilestoneApprovedEvent;
     const tenant = await this.tenantManagementService.getCurrentTenant();
 
     this.logger.log(
@@ -350,12 +350,12 @@ class FundsReleasedHandler implements IEventHandler {
   ) {}
 
   validate(event: ParsedContractEvent): boolean {
-    const data = event.data as FundsReleasedEvent;
+    const data = event.data as unknown as FundsReleasedEvent;
     return !!(data.projectId !== undefined && data.amount);
   }
 
   async handle(event: ParsedContractEvent): Promise<void> {
-    const data = event.data as FundsReleasedEvent;
+    const data = event.data as unknown as FundsReleasedEvent;
     const tenant = await this.tenantManagementService.getCurrentTenant();
 
     this.logger.log(
@@ -399,12 +399,12 @@ class ProjectCompletedHandler implements IEventHandler {
   ) {}
 
   validate(event: ParsedContractEvent): boolean {
-    const data = event.data as ProjectStatusEvent;
+    const data = event.data as unknown as ProjectStatusEvent;
     return data.projectId !== undefined;
   }
 
   async handle(event: ParsedContractEvent): Promise<void> {
-    const data = event.data as ProjectStatusEvent;
+    const data = event.data as unknown as ProjectStatusEvent;
     const tenant = await this.tenantManagementService.getCurrentTenant();
 
     this.logger.log(`Processing PROJECT_COMPLETED: Project ${data.projectId}`);
@@ -429,12 +429,12 @@ class ProjectFailedHandler implements IEventHandler {
   ) {}
 
   validate(event: ParsedContractEvent): boolean {
-    const data = event.data as ProjectStatusEvent;
+    const data = event.data as unknown as ProjectStatusEvent;
     return data.projectId !== undefined;
   }
 
   async handle(event: ParsedContractEvent): Promise<void> {
-    const data = event.data as ProjectStatusEvent;
+    const data = event.data as unknown as ProjectStatusEvent;
     const tenant = await this.tenantManagementService.getCurrentTenant();
 
     this.logger.log(`Processing PROJECT_FAILED: Project ${data.projectId}`);

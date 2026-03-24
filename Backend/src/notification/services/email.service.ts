@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { UsageMetric } from '@prisma/client';
 import * as sgMail from '@sendgrid/mail';
 import { PrismaService } from '../../prisma.service';
 import { TenantUsageService } from '../../tenancy/tenant-usage.service';
@@ -32,7 +31,7 @@ export class EmailService {
 
             await sgMail.send(msg);
             await this.tenantUsageService.recordUsageForTenantId(tenantId, {
-                metric: UsageMetric.EMAIL_SENT,
+                metric: 'EMAIL_SENT',
                 quantity: 1,
                 metadata: { subject },
             });

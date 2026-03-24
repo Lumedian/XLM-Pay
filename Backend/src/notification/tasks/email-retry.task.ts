@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { UsageMetric } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import * as sgMail from '@sendgrid/mail';
 import { TenantUsageService } from '../../tenancy/tenant-usage.service';
@@ -47,7 +46,7 @@ export class EmailRetryTask {
 
                 await sgMail.send(msg);
                 await this.tenantUsageService.recordUsageForTenantId(email.tenantId, {
-                    metric: UsageMetric.EMAIL_SENT,
+                    metric: 'EMAIL_SENT',
                     quantity: 1,
                     metadata: { subject: email.subject, retry: true },
                 });
