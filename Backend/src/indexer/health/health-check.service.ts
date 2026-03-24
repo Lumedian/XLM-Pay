@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+
 import { EventListenerService } from '../events/event-listener.service';
 import { StorageService } from '../storage/storage.service';
 
@@ -52,9 +53,9 @@ export class HealthCheckService {
   constructor(
     private eventListener: EventListenerService,
     private storage: StorageService,
-  ) { }
+  ) {}
 
-  async getHealthStatus (): Promise<HealthStatus> {
+  async getHealthStatus(): Promise<HealthStatus> {
     const timestamp = new Date();
     const uptime = Date.now() - this.startTime;
 
@@ -100,7 +101,7 @@ export class HealthCheckService {
     return healthStatus;
   }
 
-  private async checkEventListenerHealth (): Promise<ComponentHealth> {
+  private async checkEventListenerHealth(): Promise<ComponentHealth> {
     const startTime = Date.now();
 
     try {
@@ -132,7 +133,6 @@ export class HealthCheckService {
           reconnectStatus,
         },
       };
-
     } catch (error) {
       return {
         status: 'unhealthy',
@@ -143,7 +143,7 @@ export class HealthCheckService {
     }
   }
 
-  private async checkStorageHealth (): Promise<ComponentHealth> {
+  private async checkStorageHealth(): Promise<ComponentHealth> {
     const startTime = Date.now();
 
     try {
@@ -162,7 +162,6 @@ export class HealthCheckService {
           totalEvents: eventCount,
         },
       };
-
     } catch (error) {
       return {
         status: 'unhealthy',
@@ -173,7 +172,7 @@ export class HealthCheckService {
     }
   }
 
-  private async checkProcessorHealth (): Promise<ComponentHealth> {
+  private async checkProcessorHealth(): Promise<ComponentHealth> {
     const startTime = Date.now();
 
     try {
@@ -204,7 +203,6 @@ export class HealthCheckService {
         error,
         details: stats,
       };
-
     } catch (error) {
       return {
         status: 'unhealthy',
@@ -215,7 +213,7 @@ export class HealthCheckService {
     }
   }
 
-  private async getSyncStatus (): Promise<SyncStatus> {
+  private async getSyncStatus(): Promise<SyncStatus> {
     try {
       const currentLedger = await this.storage.getLatestLedger();
       const latestLedger = await this.getLatestStellarLedger();
@@ -236,7 +234,6 @@ export class HealthCheckService {
         lastSync,
         syncRate,
       };
-
     } catch (error) {
       this.logger.error('Error getting sync status:', error);
       return {
@@ -250,7 +247,7 @@ export class HealthCheckService {
     }
   }
 
-  private async getHealthMetrics (): Promise<HealthMetrics> {
+  private async getHealthMetrics(): Promise<HealthMetrics> {
     try {
       const stats = await this.getProcessingStats();
       const memUsage = process.memoryUsage();
@@ -269,7 +266,6 @@ export class HealthCheckService {
         memoryUsage: memUsage.heapUsed / 1024 / 1024, // MB
         cpuUsage: process.cpuUsage().user / 1000000, // seconds
       };
-
     } catch (error) {
       this.logger.error('Error getting health metrics:', error);
       return {
@@ -283,37 +279,37 @@ export class HealthCheckService {
     }
   }
 
-  private determineOverallStatus (statuses: ComponentHealth['status'][]): HealthStatus['status'] {
-    if (statuses.some(status => status === 'unhealthy')) {
+  private determineOverallStatus(statuses: ComponentHealth['status'][]): HealthStatus['status'] {
+    if (statuses.some((status) => status === 'unhealthy')) {
       return 'unhealthy';
     }
 
-    if (statuses.some(status => status === 'degraded')) {
+    if (statuses.some((status) => status === 'degraded')) {
       return 'degraded';
     }
 
     return 'healthy';
   }
 
-  private async getLatestStellarLedger (): Promise<number> {
+  private async getLatestStellarLedger(): Promise<number> {
     // In a real implementation, query Stellar network for latest ledger
     // For now, return a mock value
     return 1000000;
   }
 
-  private async calculateSyncRate (): Promise<number> {
+  private async calculateSyncRate(): Promise<number> {
     // Calculate how many ledgers per minute we're processing
     // This would use historical data in a real implementation
     return 60; // Mock: 60 ledgers per minute
   }
 
-  private async calculateEventsPerMinute (): Promise<number> {
+  private async calculateEventsPerMinute(): Promise<number> {
     // Calculate events processed in the last minute
     // This would query the database for recent events
     return 100; // Mock: 100 events per minute
   }
 
-  private async calculateErrorRate (): Promise<number> {
+  private async calculateErrorRate(): Promise<number> {
     // Calculate error rate as percentage
     const stats = await this.getProcessingStats();
 
@@ -324,7 +320,7 @@ export class HealthCheckService {
     return (stats.failedCount / stats.processedCount) * 100;
   }
 
-  private async getProcessingStats (): Promise<{
+  private async getProcessingStats(): Promise<{
     queueSize: number;
     processedCount: number;
     failedCount: number;
@@ -339,11 +335,11 @@ export class HealthCheckService {
     };
   }
 
-  async getHealthHistory (limit: number = 50): Promise<HealthStatus[]> {
+  async getHealthHistory(limit: number = 50): Promise<HealthStatus[]> {
     return this.healthHistory.slice(-limit);
   }
 
-  async getDetailedHealthReport (): Promise<{
+  async getDetailedHealthReport(): Promise<{
     current: HealthStatus;
     history: HealthStatus[];
     trends: {
@@ -365,7 +361,7 @@ export class HealthCheckService {
     };
   }
 
-  private analyzeTrends (history: HealthStatus[]): {
+  private analyzeTrends(history: HealthStatus[]): {
     statusChanges: number;
     averageResponseTime: number;
     errorTrend: 'improving' | 'stable' | 'degrading';
@@ -390,20 +386,21 @@ export class HealthCheckService {
 
     // Calculate average response time
     const responseTimes = history
-      .map(h => Object.values(h.components).map(c => c.responseTime || 0))
+      .map((h) => Object.values(h.components).map((c) => c.responseTime || 0))
       .flat()
-      .filter(t => t > 0);
+      .filter((t) => t > 0);
 
-    const averageResponseTime = responseTimes.length > 0
-      ? responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length
-      : 0;
+    const averageResponseTime =
+      responseTimes.length > 0
+        ? responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length
+        : 0;
 
     // Analyze error trend
-    const recentErrors = history.slice(-10).map(h => h.metrics.errorRate);
+    const recentErrors = history.slice(-10).map((h) => h.metrics.errorRate);
     const errorTrend = this.calculateTrend(recentErrors);
 
     // Analyze sync trend
-    const recentSyncLag = history.slice(-10).map(h => h.sync.lag);
+    const recentSyncLag = history.slice(-10).map((h) => h.sync.lag);
     const syncTrend = this.calculateTrend(recentSyncLag, true); // Lower is better for lag
 
     return {
@@ -414,9 +411,9 @@ export class HealthCheckService {
     };
   }
 
-  private calculateTrend (
+  private calculateTrend(
     values: number[],
-    lowerIsBetter: boolean = false
+    lowerIsBetter: boolean = false,
   ): 'improving' | 'stable' | 'degrading' {
     if (values.length < 2) return 'stable';
 
@@ -440,13 +437,13 @@ export class HealthCheckService {
     }
   }
 
-  isHealthy (): boolean {
+  isHealthy(): boolean {
     return this.healthHistory.length > 0
       ? this.healthHistory[this.healthHistory.length - 1].status === 'healthy'
       : false;
   }
 
-  getLastHealthCheck (): Date {
+  getLastHealthCheck(): Date {
     return this.lastHealthCheck;
   }
 }

@@ -1,19 +1,15 @@
-import {
-  ExceptionFilter,
-  Catch,
-  ArgumentsHost,
-  Logger,
-} from '@nestjs/common';
-import { ValidationError } from 'class-validator';
+import { ArgumentsHost, Catch, ExceptionFilter, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { ValidationException } from '../exceptions/http.exception';
+
 import { ERROR_CODES } from '../exceptions/error-codes';
+import { ValidationError } from 'class-validator';
+import { ValidationException } from '../exceptions/http.exception';
 
 @Catch(ValidationError)
 export class ValidationFilter implements ExceptionFilter {
   private readonly logger = new Logger(ValidationFilter.name);
 
-  catch (exception: ValidationError, host: ArgumentsHost): void {
+  catch(exception: ValidationError, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
@@ -38,10 +34,10 @@ export class ValidationFilter implements ExceptionFilter {
     });
   }
 
-  private formatValidationErrors (validationErrors: ValidationError | ValidationError[]): any[] {
+  private formatValidationErrors(validationErrors: ValidationError | ValidationError[]): any[] {
     const errors = Array.isArray(validationErrors) ? validationErrors : [validationErrors];
 
-    return errors.map(error => ({
+    return errors.map((error) => ({
       field: error.property,
       code: this.getValidationErrorCode(error),
       message: this.getValidationErrorMessage(error),
@@ -53,7 +49,7 @@ export class ValidationFilter implements ExceptionFilter {
     }));
   }
 
-  private getValidationErrorCode (error: ValidationError): string {
+  private getValidationErrorCode(error: ValidationError): string {
     const constraints = error.constraints || {};
     const firstConstraint = Object.keys(constraints)[0];
 
@@ -77,7 +73,7 @@ export class ValidationFilter implements ExceptionFilter {
     return errorCodeMap[firstConstraint] || ERROR_CODES.VALIDATION_FAILED;
   }
 
-  private getValidationErrorMessage (error: ValidationError): string {
+  private getValidationErrorMessage(error: ValidationError): string {
     const constraints = error.constraints || {};
     const firstConstraint = Object.keys(constraints)[0];
 
@@ -97,7 +93,7 @@ export class ValidationFilter implements ExceptionFilter {
     return defaultMessageMap[error.property] || 'Invalid value';
   }
 
-  private getRequestId (request: Request): string {
+  private getRequestId(request: Request): string {
     return (
       this.getHeaderValue(request.headers['x-request-id']) ||
       this.getHeaderValue(request.headers['request-id']) ||
@@ -105,7 +101,7 @@ export class ValidationFilter implements ExceptionFilter {
     );
   }
 
-  private getHeaderValue (value: string | string[] | undefined): string | undefined {
+  private getHeaderValue(value: string | string[] | undefined): string | undefined {
     return Array.isArray(value) ? value[0] : value;
   }
 }

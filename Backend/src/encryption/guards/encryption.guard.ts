@@ -1,23 +1,21 @@
-import { Injectable, CanActivate, ExecutionContext, SetMetadata } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { CanActivate, ExecutionContext, Injectable, SetMetadata } from '@nestjs/common';
+
 import { EncryptionService } from '../services/encryption.service';
+import { Reflector } from '@nestjs/core';
 
 @Injectable()
 export class EncryptionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly encryptionService: EncryptionService,
-  ) { }
+  ) {}
 
-  async canActivate (context: ExecutionContext): Promise<boolean> {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const handler = context.getHandler();
 
     // Check if handler requires encryption
-    const requiresEncryption = this.reflector.get<boolean>(
-      'requires_encryption',
-      handler,
-    );
+    const requiresEncryption = this.reflector.get<boolean>('requires_encryption', handler);
 
     if (!requiresEncryption) {
       return true;

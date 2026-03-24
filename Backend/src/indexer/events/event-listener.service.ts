@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+
 import { EventEmitter } from 'events';
 import { Horizon } from '@stellar/stellar-sdk';
 
@@ -40,11 +41,11 @@ export class EventListenerService extends EventEmitter {
     super();
     this.stellarServer = new Horizon.Server(
       process.env.STELLAR_HORIZON_URL || 'https://horizon.stellar.org',
-      { allowHttp: false }
+      { allowHttp: false },
     );
   }
 
-  async startListening (contractIds: string[] = []): Promise<void> {
+  async startListening(contractIds: string[] = []): Promise<void> {
     if (this.isListening) {
       this.logger.warn('Event listener is already running');
       return;
@@ -67,7 +68,7 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  async stopListening (): Promise<void> {
+  async stopListening(): Promise<void> {
     if (!this.isListening) {
       return;
     }
@@ -81,10 +82,10 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  async backfillEvents (
+  async backfillEvents(
     fromLedger: number,
     toLedger?: number,
-    contractIds: string[] = []
+    contractIds: string[] = [],
   ): Promise<SorobanEvent[]> {
     this.logger.log(`Backfilling events from ledger ${fromLedger} to ${toLedger || 'latest'}`);
 
@@ -106,7 +107,7 @@ export class EventListenerService extends EventEmitter {
 
         const transactionEvents = await this.extractEventsFromTransactions(
           response.records,
-          contractIds
+          contractIds,
         );
 
         events.push(...transactionEvents);
@@ -129,7 +130,7 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  private async streamEvents (contractIds: string[]): Promise<void> {
+  private async streamEvents(contractIds: string[]): Promise<void> {
     while (this.isListening) {
       try {
         const callBuilder = this.stellarServer.transactions();
@@ -138,19 +139,13 @@ export class EventListenerService extends EventEmitter {
           callBuilder.cursor(this.currentCursor);
         }
 
-        const response = await callBuilder
-          .limit(100)
-          .order('asc')
-          .call();
+        const response = await callBuilder.limit(100).order('asc').call();
 
         if (response.records.length > 0) {
-          const events = await this.extractEventsFromTransactions(
-            response.records,
-            contractIds
-          );
+          const events = await this.extractEventsFromTransactions(response.records, contractIds);
 
           // Emit events for processing
-          events.forEach(event => {
+          events.forEach((event) => {
             this.emit('sorobanEvent', event);
           });
 
@@ -165,7 +160,6 @@ export class EventListenerService extends EventEmitter {
 
         // Wait before next poll
         await this.sleep(1000); // 1 second
-
       } catch (error) {
         this.logger.error('Error in event stream:', error);
         await this.handleStreamError(error);
@@ -173,9 +167,9 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  private async extractEventsFromTransactions (
+  private async extractEventsFromTransactions(
     transactions: any[],
-    contractIds: string[]
+    contractIds: string[],
   ): Promise<SorobanEvent[]> {
     const events: SorobanEvent[] = [];
 
@@ -186,11 +180,7 @@ export class EventListenerService extends EventEmitter {
 
       for (const op of tx.operations) {
         if (op.type === 'invoke_host_function' && op.value?.effects) {
-          const sorobanEvents = this.parseSorobanEvents(
-            op.value.effects,
-            tx,
-            contractIds
-          );
+          const sorobanEvents = this.parseSorobanEvents(op.value.effects, tx, contractIds);
           events.push(...sorobanEvents);
         }
       }
@@ -199,10 +189,10 @@ export class EventListenerService extends EventEmitter {
     return events;
   }
 
-  private parseSorobanEvents (
+  private parseSorobanEvents(
     effects: any[],
     transaction: any,
-    contractIds: string[]
+    contractIds: string[],
   ): SorobanEvent[] {
     const events: SorobanEvent[] = [];
 
@@ -218,10 +208,10 @@ export class EventListenerService extends EventEmitter {
     return events;
   }
 
-  private parseContractEvent (
+  private parseContractEvent(
     effect: any,
     transaction: any,
-    contractIds: string[]
+    contractIds: string[],
   ): SorobanEvent | null {
     try {
       const contractId = effect.contract_id || effect.value?.contract_id;
@@ -249,7 +239,7 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  private async handleStreamError (error: any): Promise<void> {
+  private async handleStreamError(error: any): Promise<void> {
     this.reconnectAttempts++;
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
@@ -259,12 +249,14 @@ export class EventListenerService extends EventEmitter {
     }
 
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-    this.logger.warn(`Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
+    this.logger.warn(
+      `Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`,
+    );
 
     await this.sleep(delay);
   }
 
-  private async saveCheckpoint (lastTransaction: any): Promise<void> {
+  private async saveCheckpoint(lastTransaction: any): Promise<void> {
     try {
       const checkpoint: CursorCheckpoint = {
         ledger: lastTransaction.ledger,
@@ -279,7 +271,7 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  private async getLatestCheckpoint (): Promise<CursorCheckpoint | null> {
+  private async getLatestCheckpoint(): Promise<CursorCheckpoint | null> {
     try {
       // Get checkpoint from database (mock implementation)
       return null;
@@ -289,28 +281,28 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  private buildLedgerCursor (ledger: number): string {
+  private buildLedgerCursor(ledger: number): string {
     // In a real implementation, this would build a proper cursor
     return `ledger:${ledger}`;
   }
 
-  private generateEventId (effect: any, transaction: any): string {
+  private generateEventId(effect: any, transaction: any): string {
     return `${transaction.hash}_${effect.id || Date.now()}`;
   }
 
-  private sleep (ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  getCurrentCursor (): string | null {
+  getCurrentCursor(): string | null {
     return this.currentCursor;
   }
 
-  isRunning (): boolean {
+  isRunning(): boolean {
     return this.isListening;
   }
 
-  getReconnectStatus (): {
+  getReconnectStatus(): {
     attempts: number;
     maxAttempts: number;
     delay: number;

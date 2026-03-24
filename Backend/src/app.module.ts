@@ -1,19 +1,20 @@
-import { Module } from '@nestjs/common';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+
 import { APP_GUARD } from '@nestjs/core';
-import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
-import { UserController } from './user.controller';
 import { AppService } from './app.service';
-import { validateEnv } from './config/env.validation';
-import { ReputationModule } from './reputation/reputation.module';
+import { AuditModule } from './audit/audit.module';
+import { AuthModule } from './auth/auth.module';
+import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database.module';
 import { IndexerModule } from './indexer/indexer.module';
+import { Module } from '@nestjs/common';
 import { NotificationModule } from './notification/notification.module';
-import { AuthModule } from './auth/auth.module';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
+import { ReputationModule } from './reputation/reputation.module';
 import { ScheduleModule } from '@nestjs/schedule';
-import { AuditModule } from './audit/audit.module';
+import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
+import { UserController } from './user.controller';
+import { validateEnv } from './config/env.validation';
 
 @Module({
   imports: [
@@ -55,4 +56,4 @@ import { AuditModule } from './audit/audit.module';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

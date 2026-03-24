@@ -1,4 +1,13 @@
-import { Controller, Post, Body, Res, Req, UseGuards, Get, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Res,
+  Req,
+  UseGuards,
+  Get,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Response, Request } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -17,16 +26,16 @@ export class AuthController {
     if (!body.walletAddress) {
       throw new UnauthorizedException('Wallet address is required');
     }
-    
+
     const { accessToken, refreshToken, user } = await this.authService.login(body.walletAddress);
 
     this.setCookies(res, accessToken, refreshToken);
 
-    return { 
-      message: 'Logged in successfully', 
-      accessToken, 
+    return {
+      message: 'Logged in successfully',
+      accessToken,
       refreshToken,
-      user
+      user,
     };
   }
 
@@ -45,13 +54,17 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  async logout(@Req() req: Request, @CurrentUser() user: any, @Res({ passthrough: true }) res: Response) {
+  async logout(
+    @Req() req: Request,
+    @CurrentUser() user: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const accessToken = req.cookies['access_token'] || req.headers.authorization?.split(' ')[1];
-    
+
     if (accessToken) {
       await this.authService.logout(user.id, accessToken);
     }
-    
+
     res.clearCookie('access_token');
     res.clearCookie('refresh_token');
 
@@ -66,7 +79,7 @@ export class AuthController {
 
   private setCookies(res: Response, accessToken: string, refreshToken: string) {
     const isProduction = this.configService.get('NODE_ENV') === 'production';
-    
+
     // Access token cookie
     res.cookie('access_token', accessToken, {
       httpOnly: true,

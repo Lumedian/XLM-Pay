@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+
 import { PrismaService } from '../../prisma.service';
 import { SorobanEvent } from '../events/event-listener.service';
 
@@ -23,9 +24,9 @@ export interface EventQuery {
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
-  async storeEvent (eventData: Partial<SorobanEvent>): Promise<any> {
+  async storeEvent(eventData: Partial<SorobanEvent>): Promise<any> {
     try {
       const event = await this.prisma.processedEvent.create({
         data: {
@@ -46,7 +47,7 @@ export class StorageService {
     }
   }
 
-  async eventExists (transactionHash: string): Promise<boolean> {
+  async eventExists(transactionHash: string): Promise<boolean> {
     try {
       const count = await this.prisma.processedEvent.count({
         where: { transactionHash },
@@ -58,7 +59,7 @@ export class StorageService {
     }
   }
 
-  async getEventByTransactionHash (transactionHash: string): Promise<SorobanEvent | null> {
+  async getEventByTransactionHash(transactionHash: string): Promise<SorobanEvent | null> {
     try {
       const event = await this.prisma.processedEvent.findFirst({
         where: { transactionHash },
@@ -82,7 +83,7 @@ export class StorageService {
     }
   }
 
-  async getEvents (query: EventQuery): Promise<any[]> {
+  async getEvents(query: EventQuery): Promise<any[]> {
     try {
       const where: any = {};
 
@@ -95,9 +96,9 @@ export class StorageService {
       }
 
       if (query.toLedger) {
-        where.ledgerSeq = where.ledgerSeq ?
-          { ...where.ledgerSeq, lte: query.toLedger } :
-          { lte: query.toLedger };
+        where.ledgerSeq = where.ledgerSeq
+          ? { ...where.ledgerSeq, lte: query.toLedger }
+          : { lte: query.toLedger };
       }
 
       const events = await this.prisma.processedEvent.findMany({
@@ -114,7 +115,7 @@ export class StorageService {
     }
   }
 
-  async getEventCount (query: Partial<EventQuery>): Promise<number> {
+  async getEventCount(query: Partial<EventQuery>): Promise<number> {
     try {
       const where: any = {};
 
@@ -127,9 +128,9 @@ export class StorageService {
       }
 
       if (query.toLedger) {
-        where.ledgerSeq = where.ledgerSeq ?
-          { ...where.ledgerSeq, lte: query.toLedger } :
-          { lte: query.toLedger };
+        where.ledgerSeq = where.ledgerSeq
+          ? { ...where.ledgerSeq, lte: query.toLedger }
+          : { lte: query.toLedger };
       }
 
       return await this.prisma.processedEvent.count({ where });
@@ -139,7 +140,7 @@ export class StorageService {
     }
   }
 
-  async getLatestLedger (): Promise<number | null> {
+  async getLatestLedger(): Promise<number | null> {
     try {
       const result = await this.prisma.processedEvent.findFirst({
         orderBy: { ledgerSeq: 'desc' },
@@ -153,7 +154,7 @@ export class StorageService {
     }
   }
 
-  async getLatestCursor (): Promise<string | null> {
+  async getLatestCursor(): Promise<string | null> {
     try {
       const result = await this.prisma.ledgerCursor.findFirst({
         orderBy: { updatedAt: 'desc' },
@@ -167,7 +168,7 @@ export class StorageService {
     }
   }
 
-  async storeFailedEvent (failedEvent: FailedEvent): Promise<void> {
+  async storeFailedEvent(failedEvent: FailedEvent): Promise<void> {
     this.logger.error(`Storing failed event: ${failedEvent.transactionHash}`, failedEvent.error);
 
     // Log the failure
@@ -184,14 +185,14 @@ export class StorageService {
     });
   }
 
-  async getFailedEvents (limit: number = 100): Promise<FailedEvent[]> {
+  async getFailedEvents(limit: number = 100): Promise<FailedEvent[]> {
     const logs = await this.prisma.indexerLog.findMany({
       where: { level: 'ERROR' },
       orderBy: { timestamp: 'desc' },
       take: limit,
     });
 
-    return logs.map(log => ({
+    return logs.map((log) => ({
       id: log.id,
       type: 'error',
       contractId: '',
@@ -206,7 +207,7 @@ export class StorageService {
     }));
   }
 
-  async getProcessedEventCount (): Promise<number> {
+  async getProcessedEventCount(): Promise<number> {
     try {
       return await this.prisma.processedEvent.count();
     } catch (error) {
@@ -215,7 +216,7 @@ export class StorageService {
     }
   }
 
-  async getFailedEventCount (): Promise<number> {
+  async getFailedEventCount(): Promise<number> {
     try {
       return await this.prisma.indexerLog.count({
         where: { level: 'ERROR' },
@@ -226,7 +227,7 @@ export class StorageService {
     }
   }
 
-  async deleteEventsBeforeLedger (ledger: number): Promise<number> {
+  async deleteEventsBeforeLedger(ledger: number): Promise<number> {
     try {
       const result = await this.prisma.processedEvent.deleteMany({
         where: { ledgerSeq: { lt: ledger } },
@@ -240,7 +241,7 @@ export class StorageService {
     }
   }
 
-  async getEventStatistics (): Promise<{
+  async getEventStatistics(): Promise<{
     totalEvents: number;
     uniqueContracts: number;
     latestLedger: number | null;
@@ -294,7 +295,7 @@ export class StorageService {
     }
   }
 
-  async updateEventCursor (transactionHash: string, cursor: string): Promise<boolean> {
+  async updateEventCursor(transactionHash: string, cursor: string): Promise<boolean> {
     try {
       const result = await this.prisma.ledgerCursor.updateMany({
         where: { network: 'stellar' },
@@ -308,22 +309,19 @@ export class StorageService {
     }
   }
 
-  async getEventsByContract (contractId: string, limit: number = 100): Promise<any[]> {
+  async getEventsByContract(contractId: string, limit: number = 100): Promise<any[]> {
     return this.getEvents({ contractId, limit });
   }
 
-  async getEventsByType (eventName: string, limit: number = 100): Promise<any[]> {
+  async getEventsByType(eventName: string, limit: number = 100): Promise<any[]> {
     return this.getEvents({ eventName, limit });
   }
 
-  async getEventsInLedgerRange (
-    fromLedger: number,
-    toLedger: number
-  ): Promise<any[]> {
+  async getEventsInLedgerRange(fromLedger: number, toLedger: number): Promise<any[]> {
     return this.getEvents({ fromLedger, toLedger });
   }
 
-  private extractEventName (event: Partial<SorobanEvent>): string {
+  private extractEventName(event: Partial<SorobanEvent>): string {
     // Extract event name from event data or use default
     try {
       if (event.data) {

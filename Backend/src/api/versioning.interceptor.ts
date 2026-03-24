@@ -1,12 +1,8 @@
-import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-} from '@nestjs/common';
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { Request, Response } from 'express';
+
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { Request, Response } from 'express';
 
 export interface ApiVersionResponse {
   data: any;
@@ -27,7 +23,7 @@ export class ApiVersioningInterceptor implements NestInterceptor {
     },
   };
 
-  intercept (context: ExecutionContext, next: CallHandler): Observable<ApiVersionResponse> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<ApiVersionResponse> {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
 
@@ -56,7 +52,7 @@ export class ApiVersioningInterceptor implements NestInterceptor {
     );
   }
 
-  private extractVersion (request: Request): string {
+  private extractVersion(request: Request): string {
     // Extract version from URL path
     const pathSegments = request.path.split('/');
     const apiIndex = pathSegments.indexOf('api');
@@ -81,7 +77,7 @@ export class ApiVersioningInterceptor implements NestInterceptor {
     return '2';
   }
 
-  private normalizeHeaderValue (value: string | string[]): string | undefined {
+  private normalizeHeaderValue(value: string | string[]): string | undefined {
     return Array.isArray(value) ? value[0] : value;
   }
 }

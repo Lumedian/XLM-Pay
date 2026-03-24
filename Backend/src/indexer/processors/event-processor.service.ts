@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
 import { EventListenerService, SorobanEvent } from '../events/event-listener.service';
-import { StorageService } from '../storage/storage.service';
+import { Injectable, Logger } from '@nestjs/common';
+
 import { IndexedEvent } from '../entities/indexed-event.entity';
+import { StorageService } from '../storage/storage.service';
 
 export interface ProcessingResult {
   success: boolean;
@@ -34,13 +35,13 @@ export class EventProcessorService {
     this.initializeTransformers();
   }
 
-  private setupEventListeners (): void {
+  private setupEventListeners(): void {
     this.eventListener.on('sorobanEvent', (event: SorobanEvent) => {
       this.addToQueue(event);
     });
   }
 
-  private initializeTransformers (): void {
+  private initializeTransformers(): void {
     // Register transformers for different contract events
     this.registerTransformer('token', 'transfer', this.transformTransferEvent);
     this.registerTransformer('token', 'approval', this.transformApprovalEvent);
@@ -49,10 +50,10 @@ export class EventProcessorService {
     this.registerTransformer('amm', 'liquidity_removed', this.transformLiquidityRemovedEvent);
   }
 
-  registerTransformer (
+  registerTransformer(
     contractId: string,
     eventName: string,
-    transformFn: (event: SorobanEvent) => any
+    transformFn: (event: SorobanEvent) => any,
   ): void {
     const key = `${contractId}:${eventName}`;
     const transformers = this.transformers.get(key) || [];
@@ -64,7 +65,7 @@ export class EventProcessorService {
     this.transformers.set(key, transformers);
   }
 
-  async addToQueue (event: SorobanEvent): Promise<void> {
+  async addToQueue(event: SorobanEvent): Promise<void> {
     // Check for idempotency
     const exists = await this.storage.eventExists(event.transactionHash);
     if (exists) {
@@ -79,7 +80,7 @@ export class EventProcessorService {
     }
   }
 
-  private async processQueue (): Promise<void> {
+  private async processQueue(): Promise<void> {
     if (this.isProcessing || this.processingQueue.length === 0) {
       return;
     }
@@ -95,7 +96,7 @@ export class EventProcessorService {
     this.isProcessing = false;
   }
 
-  private async processEvent (event: SorobanEvent): Promise<ProcessingResult> {
+  private async processEvent(event: SorobanEvent): Promise<ProcessingResult> {
     const startTime = Date.now();
     let retryCount = 0;
 
@@ -108,9 +109,7 @@ export class EventProcessorService {
         const indexedEvent = await this.storage.storeEvent(event);
 
         const processingTime = Date.now() - startTime;
-        this.logger.debug(
-          `Processed event ${event.transactionHash} in ${processingTime}ms`
-        );
+        this.logger.debug(`Processed event ${event.transactionHash} in ${processingTime}ms`);
 
         return {
           success: true,
@@ -118,12 +117,11 @@ export class EventProcessorService {
           retryCount,
           processedAt: new Date(),
         };
-
       } catch (error) {
         retryCount++;
         this.logger.error(
           `Error processing event ${event.transactionHash} (attempt ${retryCount}):`,
-          error
+          error,
         );
 
         if (retryCount <= this.maxRetries) {
@@ -153,7 +151,7 @@ export class EventProcessorService {
     };
   }
 
-  private async transformEvent (event: SorobanEvent): Promise<any> {
+  private async transformEvent(event: SorobanEvent): Promise<any> {
     const eventName = this.extractEventName(event);
     const key = `${event.contractId}:${eventName}`;
     const transformers = this.transformers.get(key) || [];
@@ -172,7 +170,7 @@ export class EventProcessorService {
     return transformedData;
   }
 
-  private extractEventName (event: SorobanEvent): string {
+  private extractEventName(event: SorobanEvent): string {
     // Extract event name from topic or data
     if (event.topic && event.topic.length > 0) {
       return Buffer.from(event.topic[0], 'base64').toString('utf8');
@@ -294,7 +292,7 @@ export class EventProcessorService {
     }
   };
 
-  private transformDefaultEvent (event: SorobanEvent): any {
+  private transformDefaultEvent(event: SorobanEvent): any {
     return {
       ...event,
       eventName: this.extractEventName(event),
@@ -307,10 +305,10 @@ export class EventProcessorService {
     };
   }
 
-  private async logFailedEvent (event: SorobanEvent, error: any): Promise<void> {
+  private async logFailedEvent(event: SorobanEvent, error: any): Promise<void> {
     this.logger.error(
       `Failed to process event ${event.transactionHash} after ${this.maxRetries} retries:`,
-      error
+      error,
     );
 
     // Store failed event for manual review
@@ -322,7 +320,7 @@ export class EventProcessorService {
     });
   }
 
-  async reprocessEvent (transactionHash: string): Promise<ProcessingResult> {
+  async reprocessEvent(transactionHash: string): Promise<ProcessingResult> {
     const event = await this.storage.getEventByTransactionHash(transactionHash);
     if (!event) {
       throw new Error(`Event not found: ${transactionHash}`);
@@ -331,7 +329,7 @@ export class EventProcessorService {
     return this.processEvent(event);
   }
 
-  async getProcessingStats (): Promise<{
+  async getProcessingStats(): Promise<{
     queueSize: number;
     isProcessing: boolean;
     processedCount: number;
@@ -345,11 +343,11 @@ export class EventProcessorService {
     };
   }
 
-  private sleep (ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  getRegisteredTransformers (): Array<{ contractId: string; eventName: string }> {
+  getRegisteredTransformers(): Array<{ contractId: string; eventName: string }> {
     const transformers: Array<{ contractId: string; eventName: string }> = [];
 
     for (const [key, transformerList] of this.transformers.entries()) {

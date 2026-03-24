@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../prisma.service';
+import { NotificationChannel, NotificationType } from '@prisma/client';
+
 import { EmailService } from './email.service';
-import { WebPushService } from './web-push.service';
+import { NotificationGateway } from '../notification.gateway';
+import { PrismaService } from '../../prisma.service';
 import { SmsService } from './sms.service';
 import { TemplateService } from './template.service';
-import { NotificationGateway } from '../notification.gateway';
-import { NotificationChannel, NotificationType } from '@prisma/client';
+import { WebPushService } from './web-push.service';
 
 @Injectable()
 export class NotificationService {
@@ -18,9 +19,9 @@ export class NotificationService {
     private readonly smsService: SmsService,
     private readonly templateService: TemplateService,
     private readonly notificationGateway: NotificationGateway,
-  ) { }
+  ) {}
 
-  async notify (
+  async notify(
     userId: string,
     type: NotificationType,
     title: string,
@@ -78,12 +79,16 @@ export class NotificationService {
 
     // SMS
     if (settings.smsEnabled && user.phoneNumber) {
-      deliveryBatch.push(this.dispatch(notification.id, 'SMS', user.phoneNumber, title, renderedMessage));
+      deliveryBatch.push(
+        this.dispatch(notification.id, 'SMS', user.phoneNumber, title, renderedMessage),
+      );
     }
 
     // Web Push
     if (settings.pushEnabled && user.pushSubscription) {
-      deliveryBatch.push(this.dispatch(notification.id, 'PUSH', user.pushSubscription, title, renderedMessage, data));
+      deliveryBatch.push(
+        this.dispatch(notification.id, 'PUSH', user.pushSubscription, title, renderedMessage, data),
+      );
     }
 
     // WebSocket (Real-time) - Always try to send if enabled, but don't wait for it to track delivery
@@ -109,7 +114,7 @@ export class NotificationService {
     await Promise.all(deliveryBatch);
   }
 
-  private extractJsonString (value: unknown): string | null {
+  private extractJsonString(value: unknown): string | null {
     if (!value) {
       return null;
     }
@@ -126,7 +131,7 @@ export class NotificationService {
     return null;
   }
 
-  private async dispatch (
+  private async dispatch(
     notificationId: string,
     channel: NotificationChannel,
     target: any,

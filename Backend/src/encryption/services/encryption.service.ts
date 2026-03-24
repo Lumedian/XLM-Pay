@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+
+import { Injectable, Logger } from '@nestjs/common';
+
+import { ConfigService } from '@nestjs/config';
 
 export interface EncryptionResult {
   encryptedData: string;
@@ -56,7 +58,7 @@ export class EncryptionService {
     this.initializeEncryption();
   }
 
-  private async initializeEncryption (): Promise<void> {
+  private async initializeEncryption(): Promise<void> {
     // Initialize master key from environment
     const masterKey = this.configService.get<string>('ENCRYPTION_MASTER_KEY');
     if (!masterKey) {
@@ -70,7 +72,7 @@ export class EncryptionService {
     this.scheduleKeyRotation();
   }
 
-  private async generateInitialKey (): Promise<void> {
+  private async generateInitialKey(): Promise<void> {
     const keyId = this.generateKeyId();
     const keyData = this.generateEncryptionKey();
 
@@ -88,7 +90,7 @@ export class EncryptionService {
     this.logger.log(`Generated initial encryption key: ${keyId}`);
   }
 
-  async encryptField (data: string, fieldType: string): Promise<EncryptionResult> {
+  async encryptField(data: string, fieldType: string): Promise<EncryptionResult> {
     const startTime = Date.now();
     let keyId: string;
     let success = false;
@@ -131,7 +133,6 @@ export class EncryptionService {
       });
 
       return result;
-
     } catch (err) {
       error = err.message;
       success = false;
@@ -149,7 +150,12 @@ export class EncryptionService {
     }
   }
 
-  async decryptField (encryptedData: string, iv: string, keyId: string, fieldType: string): Promise<DecryptionResult> {
+  async decryptField(
+    encryptedData: string,
+    iv: string,
+    keyId: string,
+    fieldType: string,
+  ): Promise<DecryptionResult> {
     const startTime = Date.now();
     let success = false;
     let error: string | undefined;
@@ -186,7 +192,6 @@ export class EncryptionService {
         decryptedData: decrypted,
         success,
       };
-
     } catch (err) {
       error = err.message;
       success = false;
@@ -208,7 +213,7 @@ export class EncryptionService {
     }
   }
 
-  async rotateKeys (): Promise<EncryptionKey> {
+  async rotateKeys(): Promise<EncryptionKey> {
     this.logger.log('Starting key rotation...');
 
     const startTime = Date.now();
@@ -251,7 +256,6 @@ export class EncryptionService {
 
       this.logger.log(`Key rotation completed. New key: ${newKeyId}`);
       return newKey;
-
     } catch (err) {
       error = err.message;
       success = false;
@@ -268,7 +272,7 @@ export class EncryptionService {
     }
   }
 
-  async revokeKey (keyId: string): Promise<boolean> {
+  async revokeKey(keyId: string): Promise<boolean> {
     try {
       const key = this.encryptionKeys.get(keyId);
       if (!key) {
@@ -286,14 +290,13 @@ export class EncryptionService {
 
       this.logger.log(`Key revoked: ${keyId}`);
       return true;
-
     } catch (err) {
       this.logger.error(`Failed to revoke key ${keyId}:`, err);
       return false;
     }
   }
 
-  getActiveKey (): EncryptionKey {
+  getActiveKey(): EncryptionKey {
     const now = new Date();
 
     for (const key of this.encryptionKeys.values()) {
@@ -305,15 +308,15 @@ export class EncryptionService {
     throw new Error('No active encryption key available');
   }
 
-  getKeyById (keyId: string): EncryptionKey | null {
+  getKeyById(keyId: string): EncryptionKey | null {
     return this.encryptionKeys.get(keyId) || null;
   }
 
-  getAllKeys (): EncryptionKey[] {
+  getAllKeys(): EncryptionKey[] {
     return Array.from(this.encryptionKeys.values());
   }
 
-  getKeyRotationSchedule (): {
+  getKeyRotationSchedule(): {
     nextRotation: Date;
     lastRotation: Date;
     interval: number;
@@ -326,7 +329,7 @@ export class EncryptionService {
     };
   }
 
-  getEncryptionStatus (): {
+  getEncryptionStatus(): {
     totalKeys: number;
     activeKeys: number;
     revokedKeys: number;
@@ -336,8 +339,8 @@ export class EncryptionService {
     const now = new Date();
     const keys = Array.from(this.encryptionKeys.values());
 
-    const activeKeys = keys.filter(key => !key.isRevoked && key.expiresAt > now).length;
-    const revokedKeys = keys.filter(key => key.isRevoked).length;
+    const activeKeys = keys.filter((key) => !key.isRevoked && key.expiresAt > now).length;
+    const revokedKeys = keys.filter((key) => key.isRevoked).length;
 
     const timestamps = keys.map((key) => key.createdAt.getTime());
     const oldestKey = timestamps.length > 0 ? new Date(Math.min(...timestamps)) : null;
@@ -352,21 +355,21 @@ export class EncryptionService {
     };
   }
 
-  getAuditLogs (limit: number = 100): EncryptionAuditLog[] {
+  getAuditLogs(limit: number = 100): EncryptionAuditLog[] {
     return this.auditLogs
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
       .slice(0, limit);
   }
 
-  private generateKeyId (): string {
+  private generateKeyId(): string {
     return `key_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
   }
 
-  private generateEncryptionKey (): string {
+  private generateEncryptionKey(): string {
     return crypto.randomBytes(this.keySize).toString('hex');
   }
 
-  private async logEncryptionActivity (activity: Partial<EncryptionAuditLog>): Promise<void> {
+  private async logEncryptionActivity(activity: Partial<EncryptionAuditLog>): Promise<void> {
     const logEntry: EncryptionAuditLog = {
       id: crypto.randomUUID(),
       keyId: activity.keyId || '',
@@ -387,55 +390,60 @@ export class EncryptionService {
     // In production, save to database
     // await this.prisma.encryptionAuditLog.create({ data: logEntry });
 
-    this.logger.debug(`Encryption audit: ${activity.action} - ${activity.success ? 'SUCCESS' : 'FAILED'}`);
+    this.logger.debug(
+      `Encryption audit: ${activity.action} - ${activity.success ? 'SUCCESS' : 'FAILED'}`,
+    );
   }
 
-  private scheduleKeyRotation (): void {
+  private scheduleKeyRotation(): void {
     // Schedule key rotation check every hour
-    setInterval(async () => {
-      try {
-        const activeKey = this.getActiveKey();
-        const now = new Date();
+    setInterval(
+      async () => {
+        try {
+          const activeKey = this.getActiveKey();
+          const now = new Date();
 
-        // Rotate if key expires within next 24 hours
-        if (activeKey.expiresAt.getTime() - now.getTime() <= 24 * 60 * 60 * 1000) {
-          await this.rotateKeys();
+          // Rotate if key expires within next 24 hours
+          if (activeKey.expiresAt.getTime() - now.getTime() <= 24 * 60 * 60 * 1000) {
+            await this.rotateKeys();
+          }
+        } catch (error) {
+          this.logger.error('Key rotation check failed:', error);
         }
-      } catch (error) {
-        this.logger.error('Key rotation check failed:', error);
-      }
-    }, 60 * 60 * 1000); // Every hour
+      },
+      60 * 60 * 1000,
+    ); // Every hour
   }
 
   // Utility methods for common field types
-  async encryptEmail (email: string): Promise<EncryptionResult> {
+  async encryptEmail(email: string): Promise<EncryptionResult> {
     return this.encryptField(email, 'email');
   }
 
-  async encryptPhone (phone: string): Promise<EncryptionResult> {
+  async encryptPhone(phone: string): Promise<EncryptionResult> {
     return this.encryptField(phone, 'phone');
   }
 
-  async encryptSSN (ssn: string): Promise<EncryptionResult> {
+  async encryptSSN(ssn: string): Promise<EncryptionResult> {
     return this.encryptField(ssn, 'ssn');
   }
 
-  async encryptCreditCard (cardNumber: string): Promise<EncryptionResult> {
+  async encryptCreditCard(cardNumber: string): Promise<EncryptionResult> {
     return this.encryptField(cardNumber, 'credit_card');
   }
 
-  async encryptPersonalInfo (data: any): Promise<EncryptionResult> {
+  async encryptPersonalInfo(data: any): Promise<EncryptionResult> {
     const jsonData = JSON.stringify(data);
     return this.encryptField(jsonData, 'personal_info');
   }
 
-  async encryptFinancialData (data: any): Promise<EncryptionResult> {
+  async encryptFinancialData(data: any): Promise<EncryptionResult> {
     const jsonData = JSON.stringify(data);
     return this.encryptField(jsonData, 'financial_data');
   }
 
   // Compliance methods
-  async validateEncryptionCompliance (): Promise<{
+  async validateEncryptionCompliance(): Promise<{
     isCompliant: boolean;
     issues: string[];
     recommendations: string[];
@@ -453,8 +461,9 @@ export class EncryptionService {
 
     // Check for expired keys
     const now = new Date();
-    const expiredKeys = Array.from(this.encryptionKeys.values())
-      .filter(key => !key.isRevoked && key.expiresAt <= now);
+    const expiredKeys = Array.from(this.encryptionKeys.values()).filter(
+      (key) => !key.isRevoked && key.expiresAt <= now,
+    );
 
     if (expiredKeys.length > 0) {
       issues.push(`${expiredKeys.length} expired keys found`);

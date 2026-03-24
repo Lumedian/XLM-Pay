@@ -45,11 +45,11 @@ export abstract class BaseHttpException extends HttpException {
     this.path = path;
   }
 
-  private generateRequestId (): string {
+  private generateRequestId(): string {
     return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  getResponse (): ErrorResponse {
+  getResponse(): ErrorResponse {
     return {
       success: false,
       error: {
@@ -96,11 +96,7 @@ export class AuthorizationException extends BaseHttpException {
 }
 
 export class ResourceNotFoundException extends BaseHttpException {
-  constructor(
-    resource: string,
-    identifier?: string,
-    path?: string,
-  ) {
+  constructor(resource: string, identifier?: string, path?: string) {
     const message = identifier
       ? `${resource} with identifier '${identifier}' not found`
       : `${resource} not found`;

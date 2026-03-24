@@ -1,23 +1,24 @@
 import {
-  ExceptionFilter,
-  Catch,
   ArgumentsHost,
+  Catch,
+  ExceptionFilter,
   HttpException,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
-import { ConfigService } from '@nestjs/config';
 import { BaseHttpException, ErrorResponse } from './http.exception';
 import { ERROR_CODES, HTTP_STATUS_MAPPING } from './error-codes';
+import { Request, Response } from 'express';
+
+import { ConfigService } from '@nestjs/config';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
 
-  constructor(private readonly configService: ConfigService) { }
+  constructor(private readonly configService: ConfigService) {}
 
-  catch (exception: unknown, host: ArgumentsHost): void {
+  catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request & { user?: { id?: string } }>();
@@ -31,7 +32,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       httpStatus = exception.httpStatus;
 
       this.logError(exception, request, 'Custom HTTP Exception');
-
     } else if (exception instanceof HttpException) {
       // Handle NestJS HTTP exceptions
       const status = exception.getStatus();
@@ -54,7 +54,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       httpStatus = status;
 
       this.logError(exception, request, 'NestJS HTTP Exception');
-
     } else if (exception instanceof Error) {
       // Handle generic errors
       const isProduction = this.configService.get('NODE_ENV') === 'production';
@@ -67,21 +66,24 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           timestamp: new Date().toISOString(),
           path: request.url,
           requestId: this.getRequestId(request),
-          ...(isProduction ? {} : {
-            details: [{
-              field: 'stack',
-              code: 'STACK_TRACE',
-              message: exception.stack,
-              timestamp: new Date().toISOString(),
-            }]
-          }),
+          ...(isProduction
+            ? {}
+            : {
+                details: [
+                  {
+                    field: 'stack',
+                    code: 'STACK_TRACE',
+                    message: exception.stack,
+                    timestamp: new Date().toISOString(),
+                  },
+                ],
+              }),
         },
       };
 
       httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
 
       this.logError(exception, request, 'Generic Error');
-
     } else {
       // Handle unknown exceptions
       const isProduction = this.configService.get('NODE_ENV') === 'production';
@@ -109,7 +111,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     response.status(httpStatus).json(errorResponse);
   }
 
-  private addSecurityHeaders (response: Response): void {
+  private addSecurityHeaders(response: Response): void {
     // Prevent content type sniffing
     response.setHeader('X-Content-Type-Options', 'nosniff');
 
@@ -125,12 +127,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     // CORS (if not handled by CORS middleware)
-    response.setHeader('Access-Control-Allow-Origin', this.configService.get('ALLOWED_ORIGINS', '*'));
+    response.setHeader(
+      'Access-Control-Allow-Origin',
+      this.configService.get('ALLOWED_ORIGINS', '*'),
+    );
     response.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE');
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Request-ID');
   }
 
-  private getErrorCodeFromStatus (status: number): string {
+  private getErrorCodeFromStatus(status: number): string {
     // Find error code by HTTP status
     for (const [code, mappedStatus] of Object.entries(HTTP_STATUS_MAPPING)) {
       if (mappedStatus === status) {
@@ -140,7 +145,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     return ERROR_CODES.INTERNAL_SERVER_ERROR;
   }
 
-  private getRequestId (request: Request): string {
+  private getRequestId(request: Request): string {
     // Try to get request ID from header or generate new one
     return (
       this.getHeaderValue(request.headers['x-request-id']) ||
@@ -149,7 +154,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     );
   }
 
-  private logError (
+  private logError(
     exception: Error,
     request: Request & { user?: { id?: string } },
     type: string,
@@ -173,9 +178,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     };
 
     // Log based on error severity
-    const httpStatus = exception instanceof BaseHttpException
-      ? exception.httpStatus
-      : HttpStatus.INTERNAL_SERVER_ERROR;
+    const httpStatus =
+      exception instanceof BaseHttpException
+        ? exception.httpStatus
+        : HttpStatus.INTERNAL_SERVER_ERROR;
 
     if (httpStatus >= 500) {
       this.logger.error(`[${type}] ${exception.message}`, logData);
@@ -191,7 +197,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
   }
 
-  private getClientIP (request: Request): string {
+  private getClientIP(request: Request): string {
     return (
       this.getHeaderValue(request.headers['x-forwarded-for'])?.split(',')[0]?.trim() ||
       this.getHeaderValue(request.headers['x-real-ip']) ||
@@ -201,11 +207,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     );
   }
 
-  private getHeaderValue (value: string | string[] | undefined): string | undefined {
+  private getHeaderValue(value: string | string[] | undefined): string | undefined {
     return Array.isArray(value) ? value[0] : value;
   }
 
-  private toErrorDetails (value: unknown) {
+  private toErrorDetails(value: unknown) {
     return [
       {
         code: 'HTTP_EXCEPTION',
@@ -215,7 +221,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     ];
   }
 
-  private ensureError (value: unknown): Error {
+  private ensureError(value: unknown): Error {
     if (value instanceof Error) {
       return value;
     }
@@ -223,7 +229,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     return new Error(typeof value === 'string' ? value : 'Unknown error occurred');
   }
 
-  private sendToMonitoring (logData: any, exception: Error): void {
+  private sendToMonitoring(logData: any, exception: Error): void {
     // Send to external monitoring services like Sentry, DataDog, etc.
     // This would be implemented based on your monitoring setup
 

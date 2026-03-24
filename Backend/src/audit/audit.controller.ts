@@ -10,23 +10,23 @@ import { QueryAuditLogsDto } from './dto/query-audit-logs.dto';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.SUPER_ADMIN, Role.TENANT_ADMIN)
 export class AuditController {
-    constructor(private readonly auditLogService: AuditLogService) { }
+  constructor(private readonly auditLogService: AuditLogService) {}
 
-    @Get()
-    async getAuditLogs (@Query() query: QueryAuditLogsDto) {
-        return this.auditLogService.queryLogs({
-            page: query.page || 1,
-            pageSize: query.pageSize || 25,
-            eventType: query.eventType,
-            action: query.action,
-            entityType: query.entityType,
-            entityId: query.entityId,
-            userId: query.userId,
-            requestId: query.requestId,
-            method: query.method,
-            success: query.success,
-            from: query.from ? new Date(query.from) : undefined,
-            to: query.to ? new Date(query.to) : undefined,
-        });
-    }
+  @Get()
+  async getAuditLogs(@Query() query: QueryAuditLogsDto) {
+    return this.auditLogService.queryLogs({
+      page: query.page || 1,
+      pageSize: query.pageSize || 25,
+      eventType: query.eventType,
+      action: query.action,
+      entityType: query.entityType,
+      entityId: query.entityId,
+      userId: query.userId,
+      requestId: query.requestId,
+      method: query.method,
+      success: query.success,
+      from: query.from ? new Date(query.from) : undefined,
+      to: query.to ? new Date(query.to) : undefined,
+    });
+  }
 }

@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { PrismaService } from '../../prisma.service';
+import { Injectable, Logger } from '@nestjs/common';
+
 import { EmailService } from '../services/email.service';
+import { NotificationGateway } from '../notification.gateway';
+import { PrismaService } from '../../prisma.service';
 import { SmsService } from '../services/sms.service';
 import { WebPushService } from '../services/web-push.service';
-import { NotificationGateway } from '../notification.gateway';
 
 @Injectable()
 export class NotificationRetryTask {
@@ -17,10 +18,10 @@ export class NotificationRetryTask {
     private readonly smsService: SmsService,
     private readonly webPushService: WebPushService,
     private readonly notificationGateway: NotificationGateway,
-  ) { }
+  ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
-  async handleCron () {
+  async handleCron() {
     this.logger.debug('Checking notification deliveries for failed messages...');
 
     const failedDeliveries = await this.prisma.notificationDelivery.findMany({
@@ -53,7 +54,11 @@ export class NotificationRetryTask {
         switch (delivery.channel) {
           case 'EMAIL':
             if (email) {
-              await this.emailService.sendEmail(email, notification.title, `<p>${notification.message}</p>`);
+              await this.emailService.sendEmail(
+                email,
+                notification.title,
+                `<p>${notification.message}</p>`,
+              );
             }
             break;
           case 'SMS':
@@ -91,7 +96,9 @@ export class NotificationRetryTask {
           },
         });
 
-        this.logger.log(`Successfully retried ${delivery.channel} for notification ${delivery.notificationId}`);
+        this.logger.log(
+          `Successfully retried ${delivery.channel} for notification ${delivery.notificationId}`,
+        );
       } catch (error) {
         this.logger.error(`Retry failed for delivery ${delivery.id}: ${error.message}`);
 
@@ -107,7 +114,7 @@ export class NotificationRetryTask {
     }
   }
 
-  private extractJsonString (value: unknown): string | null {
+  private extractJsonString(value: unknown): string | null {
     if (!value) {
       return null;
     }

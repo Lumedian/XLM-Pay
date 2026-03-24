@@ -56,10 +56,12 @@ class MilestoneRejectedHandler implements IEventHandler {
           'MILESTONE',
           'Project Milestone Failed',
           `A project you back (${project.title}) has a failed milestone!`,
-          { projectId: project.id, milestoneId: data.milestoneId }
+          { projectId: project.id, milestoneId: data.milestoneId },
         );
       } catch (e) {
-        this.logger.error(`Failed to notify investor ${contribution.investorId} of milestone: ${e.message}`);
+        this.logger.error(
+          `Failed to notify investor ${contribution.investorId} of milestone: ${e.message}`,
+        );
       }
     }
 
@@ -92,7 +94,7 @@ class ProjectCreatedHandler implements IEventHandler {
   readonly eventType = ContractEventType.PROJECT_CREATED;
   private readonly logger = new Logger(ProjectCreatedHandler.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   validate(event: ParsedContractEvent): boolean {
     const data = event.data as unknown as ProjectCreatedEvent;
@@ -154,7 +156,7 @@ class ContributionMadeHandler implements IEventHandler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationService: NotificationService,
-  ) { }
+  ) {}
 
   validate(event: ParsedContractEvent): boolean {
     const data = event.data as unknown as ContributionMadeEvent;
@@ -216,10 +218,12 @@ class ContributionMadeHandler implements IEventHandler {
         'CONTRIBUTION',
         'Contribution Successful!',
         `Your contribution of ${data.amount} to project ${project.title} was successful.`,
-        { projectId: project.id, amount: data.amount }
+        { projectId: project.id, amount: data.amount },
       );
     } catch (e) {
-      this.logger.error(`Failed to send contribution notification to user ${user.id}: ${e.message}`);
+      this.logger.error(
+        `Failed to send contribution notification to user ${user.id}: ${e.message}`,
+      );
     }
 
     this.logger.log(`Recorded contribution of ${data.amount} for project ${data.projectId}`);
@@ -237,7 +241,7 @@ class MilestoneApprovedHandler implements IEventHandler {
     private readonly prisma: PrismaService,
     private readonly notificationService: NotificationService,
     private readonly reputationService: ReputationService,
-  ) { }
+  ) {}
 
   validate(event: ParsedContractEvent): boolean {
     const data = event.data as unknown as MilestoneApprovedEvent;
@@ -288,10 +292,12 @@ class MilestoneApprovedHandler implements IEventHandler {
           'MILESTONE',
           'Project Milestone Reached!',
           `A project you back (${project.title}) has reached a new milestone!`,
-          { projectId: project.id, milestoneId: data.milestoneId }
+          { projectId: project.id, milestoneId: data.milestoneId },
         );
       } catch (e) {
-        this.logger.error(`Failed to notify investor ${contribution.investorId} of milestone: ${e.message}`);
+        this.logger.error(
+          `Failed to notify investor ${contribution.investorId} of milestone: ${e.message}`,
+        );
       }
     }
 
@@ -312,7 +318,7 @@ class FundsReleasedHandler implements IEventHandler {
   readonly eventType = ContractEventType.FUNDS_RELEASED;
   private readonly logger = new Logger(FundsReleasedHandler.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   validate(event: ParsedContractEvent): boolean {
     const data = event.data as unknown as FundsReleasedEvent;
@@ -357,7 +363,7 @@ class ProjectCompletedHandler implements IEventHandler {
   readonly eventType = ContractEventType.PROJECT_COMPLETED;
   private readonly logger = new Logger(ProjectCompletedHandler.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   validate(event: ParsedContractEvent): boolean {
     const data = event.data as unknown as ProjectStatusEvent;
@@ -385,7 +391,7 @@ class ProjectFailedHandler implements IEventHandler {
   readonly eventType = ContractEventType.PROJECT_FAILED;
   private readonly logger = new Logger(ProjectFailedHandler.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   validate(event: ParsedContractEvent): boolean {
     const data = event.data as unknown as ProjectStatusEvent;
@@ -428,8 +434,12 @@ export class EventHandlerService implements IEventHandlerRegistry {
   private registerHandlers(): void {
     this.register(new ProjectCreatedHandler(this.prisma));
     this.register(new ContributionMadeHandler(this.prisma, this.notificationService));
-    this.register(new MilestoneApprovedHandler(this.prisma, this.notificationService, this.reputationService));
-    this.register(new MilestoneRejectedHandler(this.prisma, this.notificationService, this.reputationService));
+    this.register(
+      new MilestoneApprovedHandler(this.prisma, this.notificationService, this.reputationService),
+    );
+    this.register(
+      new MilestoneRejectedHandler(this.prisma, this.notificationService, this.reputationService),
+    );
     this.register(new FundsReleasedHandler(this.prisma));
     this.register(new ProjectCompletedHandler(this.prisma));
     this.register(new ProjectFailedHandler(this.prisma));
