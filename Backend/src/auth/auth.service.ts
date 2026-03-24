@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { TenantManagementService } from '../tenancy/tenant-management.service';
-import { Role } from '../tenancy/tenancy.types';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -29,7 +29,7 @@ export class AuthService {
         data: {
           tenantId: tenant.id,
           walletAddress,
-          roles: ['USER'],
+          roles: [Role.USER],
         },
       });
     }

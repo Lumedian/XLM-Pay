@@ -110,21 +110,32 @@ jobs:
       - name: Install pm2 globally
         run: npm install -g pm2
 
-      - name: Create .env.test file for testing
+      - name: Create .env file for testing
         run: |
-          cp .env.example .env.test || echo "DB_TYPE=sqlite" > .env.test
-          echo "NODE_ENV=test" >> .env.test
-          echo "PORT=3001" >> .env.test
-          cat .env.test
+          cp .env.example .env
+          echo "NODE_ENV=test" >> .env
+          echo "PORT=3001" >> .env
+          cat .env
 
       - name: Start application in background
         run: |
           # Set environment variable for test mode
           export NODE_ENV=test
           export PORT=3001
+
+          ENTRYPOINT="dist/main.js"
+          if [ ! -f "$ENTRYPOINT" ]; then
+            ENTRYPOINT="dist/src/main.js"
+          fi
+
+          if [ ! -f "$ENTRYPOINT" ]; then
+            echo "Application entrypoint not found"
+            find dist -maxdepth 2 -name "main.js" || true
+            exit 1
+          fi
           
           # Start the application using pm2
-          pm2 start dist/src/main.js --name "backend-app" --no-daemon &
+          pm2 start "$ENTRYPOINT" --name "backend-app"
           
           # Wait a bit for the app to start
           sleep 10
@@ -139,9 +150,10 @@ jobs:
           
           # Try to reach the server (if it has a health endpoint)
           # For now, we'll just verify that the process is running
-          if ! pgrep -f "node.*dist/src/main"; then
+          APP_PID=$(pm2 pid backend-app)
+          if [ -z "$APP_PID" ] || [ "$APP_PID" = "0" ]; then
             echo "Application failed to start properly"
-            pm2 logs --lines 50 || echo "No logs available"
+            pm2 logs backend-app --lines 50 --nostream || echo "No logs available"
             exit 1
           fi
           
@@ -153,6 +165,7 @@ jobs:
           pm2 stop all || true
           pm2 delete all || true
           pkill -f "node.*dist/src/main" || true
+          pkill -f "node.*dist/main" || true
 
   dependency-check:
     runs-on: ubuntu-latest

@@ -7,6 +7,6 @@ export const USAGE_METRICS = [
 
 export type UsageMetric = (typeof USAGE_METRICS)[number];
 
-export const USER_ROLES = ['USER', 'ADMIN', 'MENTOR'] as const;
+export const USER_ROLES = ['SUPER_ADMIN', 'TENANT_ADMIN', 'USER', 'VIEWER'] as const;
 
 export type Role = (typeof USER_ROLES)[number];

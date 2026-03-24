@@ -40,10 +40,10 @@ jobs:
           npx tsc --noEmit --pretty
           TSC_EXIT_CODE=$?
           if [ $TSC_EXIT_CODE -ne 0 ]; then
-            echo "❌ TypeScript detected type errors!"
+            echo "TypeScript detected type errors."
             exit 1
           else
-            echo "✅ TypeScript type checking passed!"
+            echo "TypeScript type checking passed."
           fi
 
   build-project:
@@ -72,27 +72,27 @@ jobs:
           npm run build
           BUILD_EXIT_CODE=$?
           if [ $BUILD_EXIT_CODE -ne 0 ]; then
-            echo "❌ Build failed!"
+            echo "Build failed."
             exit 1
           else
-            echo "✅ Build successful!"
+            echo "Build successful."
           fi
 
       - name: Verify build output
         run: |
           echo "Verifying build output..."
           if [ ! -d "dist" ]; then
-            echo "❌ Build failed: dist directory not found"
+            echo "Build failed: dist directory not found"
             exit 1
           fi
-          
+
           if [ -z "$(ls -A dist/ 2>/dev/null)" ]; then
-            echo "❌ Build failed: dist directory is empty"
+            echo "Build failed: dist directory is empty"
             exit 1
           fi
-          
+
           FILE_COUNT=$(find dist/ -type f | wc -l)
-          echo "✅ Build verified: $FILE_COUNT files generated in dist/"
+          echo "Build verified: $FILE_COUNT files generated in dist/"
 
   test-dependencies:
     runs-on: ubuntu-latest
@@ -112,10 +112,10 @@ jobs:
           npm ci
           INSTALL_EXIT_CODE=$?
           if [ $INSTALL_EXIT_CODE -ne 0 ]; then
-            echo "❌ Dependency installation failed!"
+            echo "Dependency installation failed."
             exit 1
           else
-            echo "✅ Dependencies installed successfully!"
+            echo "Dependencies installed successfully."
           fi
 
       - name: Generate Prisma client
@@ -125,18 +125,18 @@ jobs:
         run: |
           echo "Validating dependency integrity..."
           if [ ! -f "package-lock.json" ]; then
-            echo "❌ package-lock.json not found!"
+            echo "package-lock.json not found."
             exit 1
           fi
-          
+
           npm ls --depth=0 > /dev/null
           LS_EXIT_CODE=$?
           if [ $LS_EXIT_CODE -ne 0 ]; then
-            echo "❌ Dependency tree validation failed!"
+            echo "Dependency tree validation failed."
             npm ls --depth=0
             exit 1
           else
-            echo "✅ Dependency tree validation passed!"
+            echo "Dependency tree validation passed."
           fi
 
   startup-validation:
@@ -166,43 +166,43 @@ jobs:
       - name: Validate application startup
         run: |
           echo "Testing application startup..."
-          
-          # Create a temporary .env file for testing if needed
+
           if [ -f ".env.example" ]; then
-            cp .env.example .env.test
+            cp .env.example .env
           else
-            touch .env.test
-            echo "NODE_ENV=test" >> .env.test
-            echo "PORT=3001" >> .env.test
+            touch .env
           fi
-          
-          # Start the application in the background
-          timeout 30s node dist/src/main.js &
+
+          echo "NODE_ENV=test" >> .env
+          echo "PORT=3001" >> .env
+
+          ENTRYPOINT="dist/main.js"
+          if [ ! -f "$ENTRYPOINT" ]; then
+            ENTRYPOINT="dist/src/main.js"
+          fi
+
+          if [ ! -f "$ENTRYPOINT" ]; then
+            echo "Application entrypoint not found"
+            find dist -maxdepth 2 -name "main.js" || true
+            exit 1
+          fi
+
+          NODE_ENV=test PORT=3001 node "$ENTRYPOINT" > startup.log 2>&1 &
           APP_PID=$!
-          
-          # Wait for the app to attempt startup
+
           sleep 15
-          
-          # Check if the process is still running (successful startup) or has failed
-          if ps -p $APP_PID > /dev/null; then
-            echo "✅ Application started successfully"
+
+          if kill -0 $APP_PID 2>/dev/null; then
+            echo "Application started successfully."
             kill $APP_PID 2>/dev/null || true
-          elif kill -0 $APP_PID 2>/dev/null; then
-            echo "✅ Application running (PID still active)"
-            kill $APP_PID 2>/dev/null || true
+            wait $APP_PID 2>/dev/null || true
           else
-            # Process has exited - check exit code
             wait $APP_PID 2>/dev/null
             EXIT_CODE=$?
-            if [ $EXIT_CODE -eq 124 ]; then  # timeout command exit code
-              echo "✅ Application started and running (timeout reached)"
-            else
-              echo "❌ Application failed to start properly (exit code: $EXIT_CODE)"
-              # Try to show recent logs if possible
-              echo "Last few lines of output (if available):"
-              tail -n 20 nohup.out 2>/dev/null || echo "No log file available"
-              exit 1
-            fi
+            echo "Application failed to start properly (exit code: $EXIT_CODE)"
+            echo "Last few lines of output:"
+            tail -n 50 startup.log 2>/dev/null || echo "No startup log available"
+            exit 1
           fi
 
   final-validation:
@@ -212,10 +212,10 @@ jobs:
     steps:
       - name: Confirm all validations passed
         run: |
-          echo "🎉 All CI validations passed successfully!"
-          echo "✅ Type checking"
-          echo "✅ Build validation" 
-          echo "✅ Dependency analysis"
-          echo "✅ Startup validation"
+          echo "All CI validations passed successfully."
+          echo "Type checking"
+          echo "Build validation"
+          echo "Dependency analysis"
+          echo "Startup validation"
           echo ""
-          echo "Pipeline ready for merge 🚀"
+          echo "Pipeline ready for merge"
