@@ -112,6 +112,10 @@ model User {
   email            String?
   pushSubscription Json?   @map("push_subscription")
 
+  // Auth fields
+  roles              Role[]  @default([USER])
+  hashedRefreshToken String? @map("hashed_refresh_token")
+
   // Relations
   createdProjects      Project[]            @relation("ProjectCreator")
   contributions        Contribution[]
@@ -352,4 +356,19 @@ enum EmailStatus {
   PENDING
   SENT
   FAILED
+}
+
+enum Role {
+  USER
+  ADMIN
+  MENTOR
+}
+
+model TokenBlacklist {
+  id        String   @id @default(cuid())
+  token     String   @unique // The exact JWT access token string
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("token_blacklist")
 }

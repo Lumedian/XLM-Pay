@@ -10,6 +10,7 @@ import { IndexerModule } from './indexer/indexer.module';
 import { NotificationModule } from './notification/notification.module';
 import { TenantContextMiddleware } from './tenancy/tenant-context.middleware';
 import { TenancyModule } from './tenancy/tenancy.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { TenancyModule } from './tenancy/tenancy.module';
     DatabaseModule,
     IndexerModule,
     NotificationModule,
+    AuthModule,
   ],
   controllers: [AppController, UserController],
   providers: [AppService],
