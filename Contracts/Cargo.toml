@@ -14,7 +14,7 @@ lto = true
 codegen-units = 1
 strip = true
 
-# Override to prevent arbitrary feature from causing issues
-# [patch.crates-io]
-# # Use a compatible version that doesn't have the arbitrary issue
-# stellar-xdr = { version = "=20.0.3" }
+[workspace.dependencies]
+# Pin arbitrary to a version compatible with stellar-xdr 20.1.0
+# arbitrary >= 1.4.0 removed try_size_hint which stellar-xdr depends on
+arbitrary = "=1.3.2"

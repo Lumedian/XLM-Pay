@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Env, Vec, Symbol, symbol_short};
+use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
 /// Upgrade proposal that must be approved via governance
 #[contracttype]
@@ -9,18 +9,18 @@ pub struct UpgradeProposal {
     pub new_contract_hash: Symbol,
     pub target_contract: Address,
     pub description: Symbol,
-    pub approval_threshold: u32,           // e.g., 2 of 3
+    pub approval_threshold: u32, // e.g., 2 of 3
     pub approvers: Vec<Address>,
     pub approvals_count: u32,
     pub status: ProposalStatus,
     pub created_at: u64,
-    pub execution_time: u64,               // Timelock: when it can be executed
+    pub execution_time: u64, // Timelock: when it can be executed
     pub executed: bool,
 }
 
 /// Status of an upgrade proposal
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum ProposalStatus {
     Pending = 0,
@@ -32,12 +32,12 @@ pub enum ProposalStatus {
 
 /// Governance role
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum GovernanceRole {
-    Admin = 0,        // Can propose upgrades and cancel
-    Approver = 1,     // Can approve/reject proposals
-    Executor = 2,     // Can execute approved proposals (after timelock)
+    Admin = 0,    // Can propose upgrades and cancel
+    Approver = 1, // Can approve/reject proposals
+    Executor = 2, // Can execute approved proposals (after timelock)
 }
 
 /// Governance error codes
@@ -65,7 +65,7 @@ impl From<soroban_sdk::Error> for GovernanceError {
         GovernanceError::Unauthorized
     }
 }
- 
+
 pub struct GovernanceManager;
 
 impl GovernanceManager {
@@ -78,8 +78,10 @@ impl GovernanceManager {
             .get(&roles_key)
             .unwrap_or_else(|| soroban_sdk::Map::new(env));
 
-        let user_role = role_map.get(address.clone()).unwrap_or(GovernanceRole::Executor);
-        
+        let user_role = role_map
+            .get(address.clone())
+            .unwrap_or(GovernanceRole::Executor);
+
         if user_role > required_role {
             panic!("UNAUTH");
         }
@@ -309,10 +311,7 @@ impl GovernanceManager {
     }
 
     /// Get a proposal by ID
-    pub fn get_proposal(
-        env: &Env,
-        proposal_id: u64,
-    ) -> Result<UpgradeProposal, GovernanceError> {
+    pub fn get_proposal(env: &Env, proposal_id: u64) -> Result<UpgradeProposal, GovernanceError> {
         let proposals_key = symbol_short!("props");
         let proposals: soroban_sdk::Map<u64, UpgradeProposal> = env
             .storage()

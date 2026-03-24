@@ -3,6 +3,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
+import { Reflector } from '@nestjs/core';
+import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -29,6 +31,10 @@ async function bootstrap() {
     origin: true,
     credentials: true,
   });
+
+  // Global rate limiting guard (user/IP-based)
+  const reflector = app.get(Reflector);
+  app.useGlobalGuards(new UserThrottlerGuard(reflector));
 
   const port = configService.get<number>('PORT', 3000);
   await app.listen(port);

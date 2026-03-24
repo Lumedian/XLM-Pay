@@ -109,8 +109,14 @@ model User {
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   // Notification fields
-  email            String?
+  email            String? @unique @map("email_encrypted")
   pushSubscription Json?   @map("push_subscription")
+
+  // Encrypted PII fields
+  emailEncrypted   Json?    @map("email_encrypted")
+  phoneEncrypted   Json?    @map("phone_encrypted")
+  ssnEncrypted    Json?    @map("ssn_encrypted")
+  addressEncrypted Json?    @map("address_encrypted")
 
   // Auth fields
   roles              Role[]  @default([USER])
@@ -392,4 +398,25 @@ model TokenBlacklist {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("token_blacklist")
+}
+
+model EncryptionAuditLog {
+  id              String   @id @default(cuid())
+  keyId           String   @map("key_id")
+  userId          String?  @map("user_id")
+  action          String   // ENCRYPT, DECRYPT, KEY_ROTATE, KEY_REVOKE
+  field           String?  @map("field_name")
+  table           String?  @map("table_name")
+  timestamp       DateTime @default(now())
+  ipAddress       String   @map("ip_address")
+  userAgent       String?  @map("user_agent")
+  success         Boolean  @default(false)
+  error           String?  @map("error_message")
+  processingTime  Int      @map("processing_time_ms")
+
+  @@index([timestamp])
+  @@index([keyId])
+  @@index([action])
+  @@index([success])
+  @@map("encryption_audit_logs")
 }
