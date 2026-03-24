@@ -109,13 +109,13 @@ model User {
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   // Notification fields
-  email            String? @unique @map("email_encrypted")
+  email            String? @unique
   pushSubscription Json?   @map("push_subscription")
 
   // Encrypted PII fields
   emailEncrypted   Json?    @map("email_encrypted")
   phoneEncrypted   Json?    @map("phone_encrypted")
-  ssnEncrypted    Json?    @map("ssn_encrypted")
+  ssnEncrypted     Json?    @map("ssn_encrypted")
   addressEncrypted Json?    @map("address_encrypted")
 
   // Auth fields
