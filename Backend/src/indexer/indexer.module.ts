@@ -6,6 +6,9 @@ import { LedgerTrackerService } from './services/ledger-tracker.service';
 import { EventHandlerService } from './services/event-handler.service';
 import { DatabaseModule } from '../database.module';
 import stellarConfig, { indexerConfig } from '../config/stellar.config';
+import { NotificationModule } from '../notification/notification.module';
+import { ReputationModule } from '../reputation/reputation.module';
+import { TenancyModule } from '../tenancy/tenancy.module';
 
 /**
  * Blockchain Indexer Module
@@ -19,6 +22,9 @@ import stellarConfig, { indexerConfig } from '../config/stellar.config';
     ScheduleModule.forRoot(),
     // Database access
     DatabaseModule,
+    NotificationModule,
+    ReputationModule,
+    TenancyModule,
     // Configuration
     ConfigModule.forFeature(stellarConfig),
     ConfigModule.forFeature(indexerConfig),

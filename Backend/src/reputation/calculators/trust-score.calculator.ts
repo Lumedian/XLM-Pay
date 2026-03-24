@@ -3,15 +3,19 @@
 
 import { PrismaClient } from '@prisma/client';
 
-export async function calculateTrustScore(prisma: PrismaClient, creatorId: string): Promise<number> {
+export async function calculateTrustScore(
+  prisma: PrismaClient,
+  creatorId: string,
+  tenantId: string,
+): Promise<number> {
   // 1. Number of successful projects
   const successfulProjects = await prisma.project.count({
-    where: { creatorId, status: 'COMPLETED' },
+    where: { creatorId, tenantId, status: 'COMPLETED' },
   });
 
   // 2. Milestone stats
   const milestones = await prisma.milestone.findMany({
-    where: { project: { creatorId } },
+    where: { tenantId, project: { creatorId, tenantId } },
     select: { status: true, createdAt: true, completionDate: true },
   });
   const totalMilestones = milestones.length;
@@ -20,7 +24,7 @@ export async function calculateTrustScore(prisma: PrismaClient, creatorId: strin
 
   // 3. Funds stats
   const projects = await prisma.project.findMany({
-    where: { creatorId },
+    where: { creatorId, tenantId },
     select: { goal: true, currentFunds: true },
   });
   const totalRaised = projects.reduce((sum, p) => sum + Number(p.goal), 0);

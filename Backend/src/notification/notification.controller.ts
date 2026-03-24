@@ -1,16 +1,26 @@
 import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { TenantManagementService } from '../tenancy/tenant-management.service';
 
 @Controller('notifications')
 export class NotificationController {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly tenantManagementService: TenantManagementService,
+    ) { }
 
     @Get('settings/:userId')
     async getSettings(@Param('userId') userId: string) {
+        const tenant = await this.tenantManagementService.getCurrentTenant();
         return this.prisma.notificationSetting.upsert({
-            where: { userId },
+            where: {
+                tenantId_userId: {
+                    tenantId: tenant.id,
+                    userId,
+                },
+            },
             update: {},
-            create: { userId },
+            create: { tenantId: tenant.id, userId },
         });
     }
 
@@ -25,10 +35,17 @@ export class NotificationController {
             notifyDeadlines?: boolean;
         },
     ) {
+        const tenant = await this.tenantManagementService.getCurrentTenant();
         return this.prisma.notificationSetting.upsert({
-            where: { userId },
+            where: {
+                tenantId_userId: {
+                    tenantId: tenant.id,
+                    userId,
+                },
+            },
             update: settings,
             create: {
+                tenantId: tenant.id,
                 userId,
                 ...settings,
             },
@@ -40,8 +57,9 @@ export class NotificationController {
         @Param('userId') userId: string,
         @Body() subscription: any,
     ) {
-        await this.prisma.user.update({
-            where: { id: userId },
+        const tenant = await this.tenantManagementService.getCurrentTenant();
+        await this.prisma.user.updateMany({
+            where: { id: userId, tenantId: tenant.id },
             data: { pushSubscription: subscription },
         });
         return { success: true };

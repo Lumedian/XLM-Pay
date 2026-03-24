@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { UserController } from './user.controller';
@@ -8,6 +8,8 @@ import { ReputationModule } from './reputation/reputation.module';
 import { DatabaseModule } from './database.module';
 import { IndexerModule } from './indexer/indexer.module';
 import { NotificationModule } from './notification/notification.module';
+import { TenantContextMiddleware } from './tenancy/tenant-context.middleware';
+import { TenancyModule } from './tenancy/tenancy.module';
 
 @Module({
   imports: [
@@ -16,6 +18,7 @@ import { NotificationModule } from './notification/notification.module';
       envFilePath: '.env',
       validate: validateEnv,
     }),
+    TenancyModule,
     ReputationModule,
     DatabaseModule,
     IndexerModule,
@@ -24,4 +27,8 @@ import { NotificationModule } from './notification/notification.module';
   controllers: [AppController, UserController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(TenantContextMiddleware).forRoutes('*');
+  }
+}

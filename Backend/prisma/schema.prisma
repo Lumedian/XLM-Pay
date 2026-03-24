@@ -10,9 +10,98 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Tenant {
+  id               String                  @id @default(cuid())
+  slug             String                  @unique
+  name             String
+  plan             String                  @default("standard")
+  status           TenantStatus            @default(ACTIVE)
+  metadata         Json?
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  configuration    TenantConfiguration?
+  featureFlags     TenantFeatureFlag[]
+  usageEvents      TenantUsageEvent[]
+  billingSnapshots TenantBillingSnapshot[]
+  users            User[]
+  projects         Project[]
+  contributions    Contribution[]
+  milestones       Milestone[]
+  reputationHistory ReputationHistory[]
+  notificationSettings NotificationSetting[]
+  notifications    Notification[]
+  emailOutbox      EmailOutbox[]
+  ledgerCursors    LedgerCursor[]
+  processedEvents  ProcessedEvent[]
+  indexerLogs      IndexerLog[]
+
+  @@map("tenants")
+}
+
+model TenantConfiguration {
+  id                   String    @id @default(cuid())
+  tenantId             String    @unique @map("tenant_id")
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  displayName          String?   @map("display_name")
+  billingEmail         String?   @map("billing_email")
+  locale               String?
+  timeZone             String?   @map("time_zone")
+  settings             Json?
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  @@map("tenant_configurations")
+}
+
+model TenantFeatureFlag {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  key         String
+  enabled     Boolean  @default(false)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, key])
+  @@map("tenant_feature_flags")
+}
+
+model TenantUsageEvent {
+  id         String      @id @default(cuid())
+  tenantId   String      @map("tenant_id")
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  metric     UsageMetric
+  quantity   Int         @default(1)
+  recordedAt DateTime    @default(now()) @map("recorded_at")
+  metadata   Json?
+
+  @@index([tenantId, recordedAt])
+  @@index([tenantId, metric, recordedAt])
+  @@map("tenant_usage_events")
+}
+
+model TenantBillingSnapshot {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  periodStart   DateTime @map("period_start")
+  periodEnd     DateTime @map("period_end")
+  amountCents   Int      @default(0) @map("amount_cents")
+  currency      String   @default("USD")
+  breakdown     Json
+  generatedAt   DateTime @default(now()) @map("generated_at")
+
+  @@unique([tenantId, periodStart, periodEnd])
+  @@map("tenant_billing_snapshots")
+}
+
 model User {
   id              String   @id @default(cuid())
-  walletAddress   String   @unique @map("wallet_address")
+  tenantId        String   @map("tenant_id")
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  walletAddress   String   @map("wallet_address")
   profileData     Json?    @map("profile_data")
   reputationScore Int      @default(0) @map("reputation_score")
   trustScore      Int      @default(500) @map("trust_score")
@@ -20,7 +109,7 @@ model User {
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   // Notification fields
-  email            String? @unique
+  email            String?
   pushSubscription Json?   @map("push_subscription")
 
   // Relations
@@ -30,12 +119,16 @@ model User {
   notificationSettings NotificationSetting?
   notifications        Notification[]
 
+  @@unique([tenantId, walletAddress])
+  @@index([tenantId])
   @@map("users")
 }
 
 model Project {
   id           String        @id @default(cuid())
-  contractId   String        @unique @map("contract_id")
+  tenantId     String        @map("tenant_id")
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contractId   String        @map("contract_id")
   creatorId    String        @map("creator_id")
   creator      User          @relation("ProjectCreator", fields: [creatorId], references: [id])
   title        String
@@ -53,12 +146,16 @@ model Project {
   contributions Contribution[]
   milestones    Milestone[]
 
+  @@unique([tenantId, contractId])
+  @@index([tenantId, creatorId])
   @@map("projects")
 }
 
 model Contribution {
   id              String   @id @default(cuid())
-  transactionHash String   @unique @map("transaction_hash")
+  tenantId        String   @map("tenant_id")
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionHash String   @map("transaction_hash")
   investorId      String   @map("investor_id")
   investor        User     @relation(fields: [investorId], references: [id])
   projectId       String   @map("project_id")
@@ -68,11 +165,15 @@ model Contribution {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  @@unique([tenantId, transactionHash])
+  @@index([tenantId, projectId])
   @@map("contributions")
 }
 
 model Milestone {
   id             String          @id @default(cuid())
+  tenantId       String          @map("tenant_id")
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   projectId      String          @map("project_id")
   project        Project         @relation(fields: [projectId], references: [id])
   title          String
@@ -83,11 +184,14 @@ model Milestone {
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
 
+  @@index([tenantId, projectId])
   @@map("milestones")
 }
 
 model ReputationHistory {
   id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   userId      String   @map("user_id")
   user        User     @relation(fields: [userId], references: [id])
   scoreChange Int      @map("score_change")
@@ -96,6 +200,7 @@ model ReputationHistory {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  @@index([tenantId, userId])
   @@map("reputation_history")
 }
 
@@ -126,18 +231,23 @@ enum MilestoneStatus {
 
 model LedgerCursor {
   id             String   @id @default(cuid())
-  network        String   @unique
+  tenantId       String   @map("tenant_id")
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  network        String
   lastLedgerSeq  Int      @map("last_ledger_seq")
   lastLedgerHash String?  @map("last_ledger_hash")
   updatedAt      DateTime @updatedAt @map("updated_at")
   createdAt      DateTime @default(now()) @map("created_at")
 
+  @@unique([tenantId, network])
   @@map("ledger_cursors")
 }
 
 model ProcessedEvent {
   id              String   @id @default(cuid())
-  eventId         String   @unique @map("event_id")
+  tenantId        String   @map("tenant_id")
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  eventId         String   @map("event_id")
   network         String
   ledgerSeq       Int      @map("ledger_seq")
   contractId      String   @map("contract_id")
@@ -145,27 +255,32 @@ model ProcessedEvent {
   transactionHash String   @map("transaction_hash")
   processedAt     DateTime @default(now()) @map("processed_at")
 
-  @@index([network, ledgerSeq])
-  @@index([contractId, eventType])
+  @@unique([tenantId, eventId])
+  @@index([tenantId, network, ledgerSeq])
+  @@index([tenantId, contractId, eventType])
   @@map("processed_events")
 }
 
 model IndexerLog {
   id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   level     String
   message   String
   metadata  Json?
   timestamp DateTime @default(now())
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@index([timestamp])
-  @@index([level])
+  @@index([tenantId, timestamp])
+  @@index([tenantId, level])
   @@map("indexer_logs")
 }
 
 model NotificationSetting {
   id                  String   @id @default(cuid())
-  userId              String   @unique @map("user_id")
+  tenantId            String   @map("tenant_id")
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId              String   @map("user_id")
   user                User     @relation(fields: [userId], references: [id])
   emailEnabled        Boolean  @default(true) @map("email_enabled")
   pushEnabled         Boolean  @default(false) @map("push_enabled")
@@ -175,11 +290,14 @@ model NotificationSetting {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
+  @@unique([tenantId, userId])
   @@map("notification_settings")
 }
 
 model Notification {
   id        String           @id @default(cuid())
+  tenantId  String           @map("tenant_id")
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   userId    String           @map("user_id")
   user      User             @relation(fields: [userId], references: [id])
   type      NotificationType
@@ -189,12 +307,14 @@ model Notification {
   data      Json? // Optional metadata (e.g., projectId)
   createdAt DateTime         @default(now()) @map("created_at")
 
-  @@index([userId])
+  @@index([tenantId, userId])
   @@map("notifications")
 }
 
 model EmailOutbox {
   id        String      @id @default(cuid())
+  tenantId  String      @map("tenant_id")
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   to        String
   subject   String
   html      String
@@ -204,8 +324,21 @@ model EmailOutbox {
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime    @updatedAt @map("updated_at")
 
-  @@index([status])
+  @@index([tenantId, status])
   @@map("email_outbox")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  DECOMMISSIONED
+}
+
+enum UsageMetric {
+  API_REQUEST
+  EMAIL_SENT
+  NOTIFICATION_SENT
+  INDEXER_EVENT
 }
 
 enum NotificationType {

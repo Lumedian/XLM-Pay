@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { UsageMetric } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { EmailService } from './email.service';
 import { WebPushService } from './web-push.service';
+import { TenantManagementService } from '../../tenancy/tenant-management.service';
+import { TenantUsageService } from '../../tenancy/tenant-usage.service';
 
 @Injectable()
 export class NotificationService {
@@ -11,6 +14,8 @@ export class NotificationService {
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly webPushService: WebPushService,
+    private readonly tenantManagementService: TenantManagementService,
+    private readonly tenantUsageService: TenantUsageService,
   ) {}
 
   async notify(
@@ -19,9 +24,14 @@ export class NotificationService {
     title: string,
     message: string,
     data?: any,
+    tenantId?: string,
   ): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+    const tenant = tenantId
+      ? await this.tenantManagementService.getTenantById(tenantId)
+      : await this.tenantManagementService.getCurrentTenant();
+
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId: tenant.id },
       include: { notificationSettings: true },
     });
 
@@ -47,6 +57,7 @@ export class NotificationService {
     // Save notification to history
     await this.prisma.notification.create({
       data: {
+        tenantId: tenant.id,
         userId,
         type,
         title,
@@ -54,11 +65,16 @@ export class NotificationService {
         data,
       },
     });
+    await this.tenantUsageService.recordUsageForTenantId(tenant.id, {
+      metric: UsageMetric.NOTIFICATION_SENT,
+      quantity: 1,
+      metadata: { type, title },
+    });
 
     // Dispatch via Email
     if (settings.emailEnabled && user.email) {
       try {
-        await this.emailService.sendEmail(user.email, title, `<p>${message}</p>`);
+        await this.emailService.sendEmail(user.email, title, `<p>${message}</p>`, tenant.id);
       } catch (err) {
         this.logger.error(`Failed to send email to ${user.email} for notification ${title}`);
       }

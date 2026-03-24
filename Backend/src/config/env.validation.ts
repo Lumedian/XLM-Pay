@@ -1,5 +1,5 @@
 import { plainToInstance } from 'class-transformer';
-import { IsEnum, IsNumber, IsString, validateSync } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, validateSync } from 'class-validator';
 
 enum Environment {
   Development = 'development',
@@ -64,6 +64,22 @@ class EnvironmentVariables {
 
   @IsNumber()
   INDEXER_REORG_DEPTH_THRESHOLD: number;
+
+  @IsOptional()
+  @IsString()
+  TENANT_HEADER?: string;
+
+  @IsOptional()
+  @IsString()
+  DEFAULT_TENANT_SLUG?: string;
+
+  @IsOptional()
+  @IsString()
+  DEFAULT_TENANT_NAME?: string;
+
+  @IsOptional()
+  @IsString()
+  DEFAULT_TENANT_PLAN?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

@@ -42,6 +42,7 @@ export class DeadlineAlertTask {
             // We assume one notification per project for this specific alert
             const existingAlert = await this.prisma.notification.findFirst({
                 where: {
+                    tenantId: project.tenantId,
                     type: 'DEADLINE',
                     title: `24 Hours Left: ${project.title}`,
                 }
@@ -60,7 +61,8 @@ export class DeadlineAlertTask {
                         'DEADLINE',
                         `24 Hours Left: ${project.title}`,
                         `Only 24 hours left for project ${project.title} to reach its goal.`,
-                        { projectId: project.id }
+                        { projectId: project.id },
+                        project.tenantId,
                     );
                 } catch (e) {
                     this.logger.error(`Failed to notify user ${contribution.investorId} of deadline: ${e.message}`);

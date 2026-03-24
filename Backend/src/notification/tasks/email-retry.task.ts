@@ -1,14 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { UsageMetric } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import * as sgMail from '@sendgrid/mail';
+import { TenantUsageService } from '../../tenancy/tenant-usage.service';
 
 @Injectable()
 export class EmailRetryTask {
     private readonly logger = new Logger(EmailRetryTask.name);
     private readonly MAX_ATTEMPTS = 3;
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly tenantUsageService: TenantUsageService,
+    ) { }
 
     // Run every 5 minutes
     @Cron(CronExpression.EVERY_5_MINUTES)
@@ -41,6 +46,11 @@ export class EmailRetryTask {
                 };
 
                 await sgMail.send(msg);
+                await this.tenantUsageService.recordUsageForTenantId(email.tenantId, {
+                    metric: UsageMetric.EMAIL_SENT,
+                    quantity: 1,
+                    metadata: { subject: email.subject, retry: true },
+                });
 
                 // Mark as sent
                 await this.prisma.emailOutbox.update({
