@@ -27,10 +27,10 @@ export class ApiVersioningInterceptor implements NestInterceptor {
     },
   };
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<ApiVersionResponse> {
+  intercept (context: ExecutionContext, next: CallHandler): Observable<ApiVersionResponse> {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
-    
+
     // Extract version from request
     const version = this.extractVersion(request);
     const versionInfo = this.deprecatedVersions[version];
@@ -38,7 +38,7 @@ export class ApiVersioningInterceptor implements NestInterceptor {
     // Add version headers
     response.setHeader('API-Version', version);
     response.setHeader('API-Version-Status', versionInfo?.deprecated ? 'deprecated' : 'active');
-    
+
     if (versionInfo?.deprecated) {
       response.setHeader('Deprecation', 'true');
       response.setHeader('Sunset', versionInfo.sunsetDate);
@@ -56,11 +56,11 @@ export class ApiVersioningInterceptor implements NestInterceptor {
     );
   }
 
-  private extractVersion(request: Request): string {
+  private extractVersion (request: Request): string {
     // Extract version from URL path
     const pathSegments = request.path.split('/');
     const apiIndex = pathSegments.indexOf('api');
-    
+
     if (apiIndex !== -1 && pathSegments.length > apiIndex + 1) {
       return pathSegments[apiIndex + 1].replace('v', '');
     }
@@ -68,16 +68,20 @@ export class ApiVersioningInterceptor implements NestInterceptor {
     // Extract from Accept header
     const acceptHeader = request.headers['accept-version'];
     if (acceptHeader) {
-      return acceptHeader;
+      return this.normalizeHeaderValue(acceptHeader) ?? '2';
     }
 
     // Extract from custom header
     const versionHeader = request.headers['api-version'];
     if (versionHeader) {
-      return versionHeader.replace('v', '');
+      return (this.normalizeHeaderValue(versionHeader) ?? '2').replace('v', '');
     }
 
     // Default to latest version
     return '2';
+  }
+
+  private normalizeHeaderValue (value: string | string[]): string | undefined {
+    return Array.isArray(value) ? value[0] : value;
   }
 }

@@ -1,6 +1,5 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ENCRYPTED_FIELD_KEY } from '../decorators/encrypted.decorator';
 import { EncryptionService } from '../services/encryption.service';
 
 @Injectable()
@@ -8,9 +7,9 @@ export class EncryptionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly encryptionService: EncryptionService,
-  ) {}
+  ) { }
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  async canActivate (context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const handler = context.getHandler();
 
@@ -33,7 +32,8 @@ export class EncryptionGuard implements CanActivate {
 
       return true;
     } catch (error) {
-      throw new Error(`Encryption validation failed: ${error.message}`);
+      const message = error instanceof Error ? error.message : 'Unknown encryption error';
+      throw new Error(`Encryption validation failed: ${message}`);
     }
   }
 }
@@ -41,6 +41,4 @@ export class EncryptionGuard implements CanActivate {
 /**
  * Decorator to mark routes as requiring encryption
  */
-export const RequiresEncryption = () => (target: any, propertyKey: string, descriptor: PropertyDescriptor) => {
-  Reflect.defineMetadata('requires_encryption', true, target, propertyKey);
-};
+export const RequiresEncryption = () => SetMetadata('requires_encryption', true);

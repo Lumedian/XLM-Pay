@@ -2,8 +2,6 @@ import {
   ExceptionFilter,
   Catch,
   ArgumentsHost,
-  HttpException,
-  HttpStatus,
   Logger,
 } from '@nestjs/common';
 import { ValidationError } from 'class-validator';
@@ -15,7 +13,7 @@ import { ERROR_CODES } from '../exceptions/error-codes';
 export class ValidationFilter implements ExceptionFilter {
   private readonly logger = new Logger(ValidationFilter.name);
 
-  catch(exception: ValidationError, host: ArgumentsHost): void {
+  catch (exception: ValidationError, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
@@ -40,8 +38,10 @@ export class ValidationFilter implements ExceptionFilter {
     });
   }
 
-  private formatValidationErrors(validationErrors: ValidationError): any[] {
-    return validationErrors.map(error => ({
+  private formatValidationErrors (validationErrors: ValidationError | ValidationError[]): any[] {
+    const errors = Array.isArray(validationErrors) ? validationErrors : [validationErrors];
+
+    return errors.map(error => ({
       field: error.property,
       code: this.getValidationErrorCode(error),
       message: this.getValidationErrorMessage(error),
@@ -53,10 +53,10 @@ export class ValidationFilter implements ExceptionFilter {
     }));
   }
 
-  private getValidationErrorCode(error: ValidationError): string {
+  private getValidationErrorCode (error: ValidationError): string {
     const constraints = error.constraints || {};
     const firstConstraint = Object.keys(constraints)[0];
-    
+
     const errorCodeMap = {
       isEmail: ERROR_CODES.INVALID_FIELD_VALUE,
       isString: ERROR_CODES.INVALID_FIELD_VALUE,
@@ -69,7 +69,6 @@ export class ValidationFilter implements ExceptionFilter {
       min: ERROR_CODES.VALIDATION_CONSTRAINT_VIOLATION,
       max: ERROR_CODES.VALIDATION_CONSTRAINT_VIOLATION,
       matches: ERROR_CODES.INVALID_INPUT_FORMAT,
-      isEmail: ERROR_CODES.INVALID_FIELD_VALUE,
       isUrl: ERROR_CODES.INVALID_INPUT_FORMAT,
       isDate: ERROR_CODES.INVALID_FIELD_VALUE,
       isEnum: ERROR_CODES.INVALID_FIELD_VALUE,
@@ -78,14 +77,14 @@ export class ValidationFilter implements ExceptionFilter {
     return errorCodeMap[firstConstraint] || ERROR_CODES.VALIDATION_FAILED;
   }
 
-  private getValidationErrorMessage(error: ValidationError): string {
+  private getValidationErrorMessage (error: ValidationError): string {
     const constraints = error.constraints || {};
     const firstConstraint = Object.keys(constraints)[0];
-    
+
     if (constraints[firstConstraint]) {
       return constraints[firstConstraint] as string;
     }
-    
+
     // Default messages based on property
     const defaultMessageMap = {
       email: 'Invalid email format',
@@ -98,11 +97,15 @@ export class ValidationFilter implements ExceptionFilter {
     return defaultMessageMap[error.property] || 'Invalid value';
   }
 
-  private getRequestId(request: Request): string {
+  private getRequestId (request: Request): string {
     return (
-      request.headers['x-request-id'] ||
-      request.headers['request-id'] ||
+      this.getHeaderValue(request.headers['x-request-id']) ||
+      this.getHeaderValue(request.headers['request-id']) ||
       `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     );
+  }
+
+  private getHeaderValue (value: string | string[] | undefined): string | undefined {
+    return Array.isArray(value) ? value[0] : value;
   }
 }

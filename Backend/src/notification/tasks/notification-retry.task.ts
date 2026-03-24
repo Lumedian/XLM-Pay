@@ -17,10 +17,10 @@ export class NotificationRetryTask {
     private readonly smsService: SmsService,
     private readonly webPushService: WebPushService,
     private readonly notificationGateway: NotificationGateway,
-  ) {}
+  ) { }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
-  async handleCron() {
+  async handleCron () {
     this.logger.debug('Checking notification deliveries for failed messages...');
 
     const failedDeliveries = await this.prisma.notificationDelivery.findMany({
@@ -48,11 +48,12 @@ export class NotificationRetryTask {
 
         const { notification } = delivery;
         const { user } = notification;
+        const email = this.extractJsonString(user.emailEncrypted);
 
         switch (delivery.channel) {
           case 'EMAIL':
-            if (user.email) {
-              await this.emailService.sendEmail(user.email, notification.title, `<p>${notification.message}</p>`);
+            if (email) {
+              await this.emailService.sendEmail(email, notification.title, `<p>${notification.message}</p>`);
             }
             break;
           case 'SMS':
@@ -98,11 +99,28 @@ export class NotificationRetryTask {
           where: { id: delivery.id },
           data: {
             attempts: delivery.attempts + 1,
-            lastError: error.message,
+            errorMessage: error.message,
             lastAttemptAt: new Date(),
           },
         });
       }
     }
+  }
+
+  private extractJsonString (value: unknown): string | null {
+    if (!value) {
+      return null;
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (typeof value === 'object' && value !== null && 'value' in value) {
+      const nestedValue = (value as { value?: unknown }).value;
+      return typeof nestedValue === 'string' ? nestedValue : null;
+    }
+
+    return null;
   }
 }

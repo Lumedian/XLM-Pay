@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { NotificationController } from './notification.controller';
 import { NotificationService } from './services/notification.service';
 import { EmailService } from './services/email.service';
-import { WebPushService } from './web-push.service';
+import { WebPushService } from './services/web-push.service';
 import { SmsService } from './services/sms.service';
 import { TemplateService } from './services/template.service';
 import { NotificationGateway } from './notification.gateway';
@@ -25,4 +25,4 @@ import { DatabaseModule } from '../database.module';
   ],
   exports: [NotificationService],
 })
-export class NotificationModule {}
+export class NotificationModule { }

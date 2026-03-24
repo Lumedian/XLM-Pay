@@ -114,6 +114,39 @@ backend/
 - `GET /api/v1` - Welcome message
 - `GET /api/v1/health` - Health check
 
+## Audit Logging
+
+The backend now includes a tamper-evident audit logging pipeline for request tracing, CRUD activity, and internal system events.
+
+- `GET /api/v1/audit-logs` - Query audit logs with pagination and filters
+
+Supported query parameters:
+
+- `page`
+- `pageSize`
+- `eventType`
+- `action`
+- `entityType`
+- `entityId`
+- `userId`
+- `requestId`
+- `method`
+- `success`
+- `from`
+- `to`
+
+Audit log behavior:
+
+- Every HTTP request is logged with request ID, IP address, user agent, request payload, response payload, and status code.
+- Prisma create, update, upsert, and delete operations are logged automatically with before and after snapshots where available.
+- Audit rows are chained with `previousHash` and `hash` fields to make tampering detectable.
+- Retention cleanup runs daily and deletes expired rows based on `AUDIT_LOG_RETENTION_DAYS`.
+
+Relevant environment variables:
+
+- `DATABASE_URL`
+- `AUDIT_LOG_RETENTION_DAYS`
+
 ## Next Steps
 
 1. Add database integration (TypeORM or Prisma)

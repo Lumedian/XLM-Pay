@@ -1,18 +1,17 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Headers, Version } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
-import { UserService } from '../../user/user.service';
+import { UserService } from '../../user.service';
 import { CreateUserDtoV2, UpdateUserDtoV2, UserResponseDtoV2 } from './dto/user-v2.dto';
 
 @ApiTags('users')
 @Controller('api/v2/users')
-@Version('2')
 export class UsersV2Controller {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) { }
 
   @Get()
   @ApiOperation({ summary: 'Get all users (v2)' })
   @ApiResponse({ status: 200, description: 'List of users', type: [UserResponseDtoV2] })
-  async findAll(@Headers() headers): Promise<UserResponseDtoV2[]> {
+  async findAll (): Promise<UserResponseDtoV2[]> {
     return this.userService.findAllV2();
   }
 
@@ -21,9 +20,8 @@ export class UsersV2Controller {
   @ApiParam({ name: 'id', description: 'User ID' })
   @ApiResponse({ status: 200, description: 'User found', type: UserResponseDtoV2 })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async findOne(
+  async findOne (
     @Param('id') id: string,
-    @Headers() headers: Record<string, string>,
   ): Promise<UserResponseDtoV2> {
     return this.userService.findOneV2(id);
   }
@@ -33,9 +31,8 @@ export class UsersV2Controller {
   @ApiBody({ type: CreateUserDtoV2 })
   @ApiResponse({ status: 201, description: 'User created', type: UserResponseDtoV2 })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async create(
+  async create (
     @Body() createUserDto: CreateUserDtoV2,
-    @Headers() headers: Record<string, string>,
   ): Promise<UserResponseDtoV2> {
     return this.userService.createV2(createUserDto);
   }
@@ -46,10 +43,9 @@ export class UsersV2Controller {
   @ApiBody({ type: UpdateUserDtoV2 })
   @ApiResponse({ status: 200, description: 'User updated', type: UserResponseDtoV2 })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async update(
+  async update (
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDtoV2,
-    @Headers() headers: Record<string, string>,
   ): Promise<UserResponseDtoV2> {
     return this.userService.updateV2(id, updateUserDto);
   }
@@ -59,10 +55,7 @@ export class UsersV2Controller {
   @ApiParam({ name: 'id', description: 'User ID' })
   @ApiResponse({ status: 200, description: 'User deleted' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async remove(
-    @Param('id') id: string,
-    @Headers() headers: Record<string, string>,
-  ): Promise<void> {
+  async remove (@Param('id') id: string): Promise<void> {
     return this.userService.remove(id);
   }
 }

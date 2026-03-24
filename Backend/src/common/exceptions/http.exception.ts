@@ -32,21 +32,24 @@ export abstract class BaseHttpException extends HttpException {
     public readonly details?: ErrorDetail[],
     path?: string,
   ) {
-    super({
-      message,
-      statusCode: httpStatus,
-    });
-    
+    super(
+      {
+        message,
+        statusCode: httpStatus,
+      },
+      httpStatus,
+    );
+
     this.timestamp = new Date().toISOString();
     this.requestId = this.generateRequestId();
     this.path = path;
   }
 
-  private generateRequestId(): string {
+  private generateRequestId (): string {
     return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  getResponse(): ErrorResponse {
+  getResponse (): ErrorResponse {
     return {
       success: false,
       error: {
@@ -98,10 +101,10 @@ export class ResourceNotFoundException extends BaseHttpException {
     identifier?: string,
     path?: string,
   ) {
-    const message = identifier 
+    const message = identifier
       ? `${resource} with identifier '${identifier}' not found`
       : `${resource} not found`;
-    
+
     super(message, 'RESOURCE_NOT_FOUND', HttpStatus.NOT_FOUND, undefined, path);
   }
 }

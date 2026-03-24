@@ -18,9 +18,9 @@ export class NotificationService {
     private readonly smsService: SmsService,
     private readonly templateService: TemplateService,
     private readonly notificationGateway: NotificationGateway,
-  ) {}
+  ) { }
 
-  async notify(
+  async notify (
     userId: string,
     type: NotificationType,
     title: string,
@@ -69,10 +69,11 @@ export class NotificationService {
 
     // Prepare deliveries
     const deliveryBatch = [];
+    const email = this.extractJsonString(user.emailEncrypted);
 
     // Email
-    if (settings.emailEnabled && user.email) {
-      deliveryBatch.push(this.dispatch(notification.id, 'EMAIL', user.email, title, renderedMessage));
+    if (settings.emailEnabled && email) {
+      deliveryBatch.push(this.dispatch(notification.id, 'EMAIL', email, title, renderedMessage));
     }
 
     // SMS
@@ -108,7 +109,24 @@ export class NotificationService {
     await Promise.all(deliveryBatch);
   }
 
-  private async dispatch(
+  private extractJsonString (value: unknown): string | null {
+    if (!value) {
+      return null;
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (typeof value === 'object' && value !== null && 'value' in value) {
+      const nestedValue = (value as { value?: unknown }).value;
+      return typeof nestedValue === 'string' ? nestedValue : null;
+    }
+
+    return null;
+  }
+
+  private async dispatch (
     notificationId: string,
     channel: NotificationChannel,
     target: any,

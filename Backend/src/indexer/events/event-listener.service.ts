@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter } from 'events';
-import { StellarSdk } from 'stellar-sdk';
+import { Horizon } from '@stellar/stellar-sdk';
 
 export interface SorobanEvent {
   id: string;
@@ -29,7 +29,7 @@ export interface CursorCheckpoint {
 @Injectable()
 export class EventListenerService extends EventEmitter {
   private readonly logger = new Logger(EventListenerService.name);
-  private stellarServer: StellarSdk.Server;
+  private stellarServer: Horizon.Server;
   private isListening = false;
   private currentCursor: string | null = null;
   private reconnectAttempts = 0;
@@ -38,13 +38,13 @@ export class EventListenerService extends EventEmitter {
 
   constructor() {
     super();
-    this.stellarServer = new StellarSdk.Server(
+    this.stellarServer = new Horizon.Server(
       process.env.STELLAR_HORIZON_URL || 'https://horizon.stellar.org',
       { allowHttp: false }
     );
   }
 
-  async startListening(contractIds: string[] = []): Promise<void> {
+  async startListening (contractIds: string[] = []): Promise<void> {
     if (this.isListening) {
       this.logger.warn('Event listener is already running');
       return;
@@ -67,7 +67,7 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  async stopListening(): Promise<void> {
+  async stopListening (): Promise<void> {
     if (!this.isListening) {
       return;
     }
@@ -81,7 +81,7 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  async backfillEvents(
+  async backfillEvents (
     fromLedger: number,
     toLedger?: number,
     contractIds: string[] = []
@@ -112,12 +112,13 @@ export class EventListenerService extends EventEmitter {
         events.push(...transactionEvents);
 
         // Check if we've reached the target ledger
-        const lastLedger = response.records[response.records.length - 1].ledger;
+        const lastRecord = response.records[response.records.length - 1] as any;
+        const lastLedger = Number(lastRecord.ledger ?? 0);
         if (toLedger && lastLedger >= toLedger) {
           break;
         }
 
-        cursor = response.cursor;
+        cursor = lastRecord.paging_token ?? cursor;
       }
 
       this.logger.log(`Backfilled ${events.length} events`);
@@ -128,11 +129,11 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  private async streamEvents(contractIds: string[]): Promise<void> {
+  private async streamEvents (contractIds: string[]): Promise<void> {
     while (this.isListening) {
       try {
         const callBuilder = this.stellarServer.transactions();
-        
+
         if (this.currentCursor) {
           callBuilder.cursor(this.currentCursor);
         }
@@ -154,8 +155,9 @@ export class EventListenerService extends EventEmitter {
           });
 
           // Update cursor
-          this.currentCursor = response.cursor;
-          await this.saveCheckpoint(response.records[response.records.length - 1]);
+          const lastRecord = response.records[response.records.length - 1] as any;
+          this.currentCursor = lastRecord.paging_token ?? this.currentCursor;
+          await this.saveCheckpoint(lastRecord);
 
           // Reset reconnect attempts on successful processing
           this.reconnectAttempts = 0;
@@ -171,7 +173,7 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  private async extractEventsFromTransactions(
+  private async extractEventsFromTransactions (
     transactions: any[],
     contractIds: string[]
   ): Promise<SorobanEvent[]> {
@@ -197,7 +199,7 @@ export class EventListenerService extends EventEmitter {
     return events;
   }
 
-  private parseSorobanEvents(
+  private parseSorobanEvents (
     effects: any[],
     transaction: any,
     contractIds: string[]
@@ -216,14 +218,14 @@ export class EventListenerService extends EventEmitter {
     return events;
   }
 
-  private parseContractEvent(
+  private parseContractEvent (
     effect: any,
     transaction: any,
     contractIds: string[]
   ): SorobanEvent | null {
     try {
       const contractId = effect.contract_id || effect.value?.contract_id;
-      
+
       // Filter by contract IDs if specified
       if (contractIds.length > 0 && !contractIds.includes(contractId)) {
         return null;
@@ -247,7 +249,7 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  private async handleStreamError(error: any): Promise<void> {
+  private async handleStreamError (error: any): Promise<void> {
     this.reconnectAttempts++;
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
@@ -262,7 +264,7 @@ export class EventListenerService extends EventEmitter {
     await this.sleep(delay);
   }
 
-  private async saveCheckpoint(lastTransaction: any): Promise<void> {
+  private async saveCheckpoint (lastTransaction: any): Promise<void> {
     try {
       const checkpoint: CursorCheckpoint = {
         ledger: lastTransaction.ledger,
@@ -277,7 +279,7 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  private async getLatestCheckpoint(): Promise<CursorCheckpoint | null> {
+  private async getLatestCheckpoint (): Promise<CursorCheckpoint | null> {
     try {
       // Get checkpoint from database (mock implementation)
       return null;
@@ -287,28 +289,28 @@ export class EventListenerService extends EventEmitter {
     }
   }
 
-  private buildLedgerCursor(ledger: number): string {
+  private buildLedgerCursor (ledger: number): string {
     // In a real implementation, this would build a proper cursor
     return `ledger:${ledger}`;
   }
 
-  private generateEventId(effect: any, transaction: any): string {
+  private generateEventId (effect: any, transaction: any): string {
     return `${transaction.hash}_${effect.id || Date.now()}`;
   }
 
-  private sleep(ms: number): Promise<void> {
+  private sleep (ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  getCurrentCursor(): string | null {
+  getCurrentCursor (): string | null {
     return this.currentCursor;
   }
 
-  isRunning(): boolean {
+  isRunning (): boolean {
     return this.isListening;
   }
 
-  getReconnectStatus(): {
+  getReconnectStatus (): {
     attempts: number;
     maxAttempts: number;
     delay: number;
