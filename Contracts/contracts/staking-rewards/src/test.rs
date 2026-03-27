@@ -167,3 +167,60 @@ fn test_compounding() {
     assert_eq!(stake_info.amount, 1073);
     assert_eq!(token.balance(&user), 0);
 }
+
+#[test]
+fn test_slashing_mechanism() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let offender = Address::generate(&env);
+    let reporter = Address::generate(&env);
+    let victim = Address::generate(&env);
+
+    let (staking_token_address, staking_token, staking_token_admin) = create_token(&env, &admin);
+
+    let contract_id = env.register_contract(None, StakingRewardsContract);
+    let client = StakingRewardsContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin, &staking_token_address, &staking_token_address);
+
+    staking_token_admin.mint(&offender, &1000);
+    client.stake(&offender, &1000, &0); // Stake 1000
+
+    // Report misconduct
+    let proposal_id = client.report_misconduct(
+        &reporter,
+        &super::SlashableOffense::FraudulentActivity,
+        &soroban_sdk::symbol_short!("evidence"),
+        &5000, // 50% slash
+        &Some(victim.clone()),
+    );
+
+    // Wait for appeal window to expire (8 days)
+    env.ledger().set(soroban_sdk::testutils::LedgerInfo {
+        timestamp: 8 * 24 * 60 * 60,
+        protocol_version: 20,
+        sequence_number: 10,
+        network_id: [0u8; 32],
+        base_reserve: 10,
+        max_entry_ttl: 31104000,
+        min_persistent_entry_ttl: 31104000,
+        min_temp_entry_ttl: 31104000,
+    });
+
+    // Execute slashing
+    client.execute_slashing(&admin, &proposal_id);
+
+    // Check that 500 tokens were slashed and sent to victim
+    assert_eq!(staking_token.balance(&victim), 500);
+
+    // Check offender's stake
+    let stake_info = client.get_stake(&offender).unwrap();
+    assert_eq!(stake_info.amount, 1000);
+    assert_eq!(stake_info.slashed_amount, 500);
+
+    // Try to unstake - should only get effective stake
+    let returned = client.unstake(&offender);
+    assert_eq!(returned, 500); // 1000 - 500 slashed
+}
