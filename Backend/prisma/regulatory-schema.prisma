@@ -1,0 +1,326 @@
+// ─── Regulatory Reporting Schema Extensions ────────────────────────────────────────
+
+model RegulatoryReport {
+  id              String               @id @default(cuid())
+  reportType      RegulatoryReportType @map("report_type")
+  status          ReportStatus        @default(PENDING)
+  format          ReportFormat        @default(XML)
+  jurisdiction    String               // FINRA, NFA, SEC, etc.
+  filingDate      DateTime?            @map("filing_date")
+  reportPeriod    DateTimeRange        @map("report_period")
+  totalRecords    Int                  @default(0) @map("total_records")
+  encryptedData   Json                 @map("encrypted_data")
+  checksum        String               // SHA-256 for integrity
+  submittedAt     DateTime?            @map("submitted_at")
+  acknowledgedAt  DateTime?            @map("acknowledged_at")
+  errorMessage    String?              @map("error_message")
+  retryCount      Int                  @default(0) @map("retry_count")
+  metadata        Json?
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  tradeRecords    TradeReportRecord[]
+  sarRecords      SuspiciousActivityReport[]
+  complianceItems ComplianceReportItem[]
+
+  @@index([reportType, status])
+  @@index([jurisdiction, filingDate])
+  @@index([reportPeriod])
+  @@index([status, createdAt])
+  @@map("regulatory_reports")
+}
+
+model TradeReportRecord {
+  id                String            @id @default(cuid())
+  reportId          String            @map("report_id")
+  report            RegulatoryReport  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  transactionHash   String            @unique @map("transaction_hash")
+  tradeDate         DateTime          @map("trade_date")
+  symbol            String
+  quantity          Decimal           @db.Decimal(18, 8)
+  price             Decimal           @db.Decimal(18, 8)
+  totalValue        Decimal           @db.Decimal(18, 2) @map("total_value")
+  buyerAddress      String            @map("buyer_address")
+  sellerAddress     String            @map("seller_address")
+  venue             String            // Trading venue/market
+  settlementDate    DateTime?         @map("settlement_date")
+  reportableEntity  String            @map("reportable_entity")
+  timestamp         DateTime          @default(now())
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  @@index([reportId])
+  @@index([tradeDate])
+  @@index([symbol])
+  @@index([buyerAddress])
+  @@index([sellerAddress])
+  @@map("trade_report_records")
+}
+
+model SuspiciousActivityReport {
+  id                String               @id @default(cuid())
+  reportId          String               @map("report_id")
+  report            RegulatoryReport     @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  sarId             String               @unique @map("sar_id") // Regulatory SAR identifier
+  filingDate        DateTime             @map("filing_date")
+  suspiciousAmount  Decimal              @db.Decimal(18, 2) @map("suspicious_amount")
+  activityType      SuspiciousActivityType @map("activity_type")
+  involvedAddresses String[]             @map("involved_addresses")
+  timeframe         DateTimeRange        @map("timeframe")
+  narrative         String               // Detailed description
+  confidence        SuspicionConfidence  @default(MEDIUM)
+  investigationId   String?              @map("investigation_id")
+  status            SARStatus            @default(PENDING)
+  priority          SARPriority          @default(MEDIUM)
+  metadata          Json?
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  @@index([reportId])
+  @@index([filingDate])
+  @@index([activityType])
+  @@index([status, priority])
+  @@index([investigationId])
+  @@map("suspicious_activity_reports")
+}
+
+model ComplianceReportItem {
+  id                String               @id @default(cuid())
+  reportId          String               @map("report_id")
+  report            RegulatoryReport     @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  certificationType ComplianceCertificationType @map("certification_type")
+  period            DateTimeRange        @map("period")
+  certifiedBy       String               @map("certified_by") // User ID
+  certificationDate DateTime             @map("certification_date")
+  status            ComplianceStatus     @default(PENDING)
+  findings          Json?                // Compliance findings
+  recommendations   Json?                // Improvement recommendations
+  approvedBy        String?              @map("approved_by")
+  approvedAt        DateTime?            @map("approved_at")
+  metadata          Json?
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  @@index([reportId])
+  @@index([certificationType])
+  @@index([period])
+  @@index([status])
+  @@map("compliance_report_items")
+}
+
+model RegulatoryAuditTrail {
+  id                String               @id @default(cuid())
+  entityType        RegulatoryEntityType @map("entity_type")
+  entityId          String               @map("entity_id")
+  action            RegulatoryAction
+  performedBy       String               @map("performed_by")
+  previousState     Json?                @map("previous_state")
+  newState          Json?                @map("new_state")
+  ipAddress         String?              @map("ip_address")
+  userAgent         String?              @map("user_agent")
+  reason            String?
+  timestamp         DateTime             @default(now())
+  createdAt         DateTime             @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([performedBy])
+  @@index([timestamp])
+  @@map("regulatory_audit_trails")
+}
+
+model ExaminerAccess {
+  id                String               @id @default(cuid())
+  examinerId        String               @map("examiner_id")
+  examinerName      String               @map("examiner_name")
+  organization      String               // Regulatory body
+  accessLevel       ExaminerAccessLevel  @default(VIEW_ONLY)
+  permissions       Json                 // Specific permissions granted
+  validFrom         DateTime             @map("valid_from")
+  validUntil        DateTime             @map("valid_until")
+  status            ExaminerStatus        @default(ACTIVE)
+  lastLoginAt       DateTime?            @map("last_login_at")
+  accessLog         ExaminerAccessLog[]
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  @@index([examinerId])
+  @@index([organization])
+  @@index([status])
+  @@index([validFrom, validUntil])
+  @@map("examiner_access")
+}
+
+model ExaminerAccessLog {
+  id                String               @id @default(cuid())
+  examinerAccessId  String               @map("examiner_access_id")
+  examinerAccess    ExaminerAccess       @relation(fields: [examinerAccessId], references: [id], onDelete: Cascade)
+  action            ExaminerAction
+  resourceType      String               @map("resource_type")
+  resourceId        String               @map("resource_id")
+  ipAddress         String               @map("ip_address")
+  userAgent         String?              @map("user_agent")
+  success           Boolean              @default(true)
+  errorMessage      String?              @map("error_message")
+  timestamp         DateTime             @default(now())
+  createdAt         DateTime             @default(now()) @map("created_at")
+
+  @@index([examinerAccessId])
+  @@index([action])
+  @@index([timestamp])
+  @@index([resourceType])
+  @@map("examiner_access_logs")
+}
+
+model ReportRetention {
+  id                String               @id @default(cuid())
+  reportId          String               @unique @map("report_id")
+  report            RegulatoryReport     @relation(fields: [reportId], references: [id])
+  retentionPeriod   Int                  @map("retention_period") // Days
+  expiresAt         DateTime             @map("expires_at")
+  archived          Boolean              @default(false)
+  archiveLocation   String?              @map("archive_location")
+  deletionScheduled Boolean              @default(false) @map("deletion_scheduled")
+  deletedAt         DateTime?            @map("deleted_at")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  @@index([expiresAt])
+  @@index([archived])
+  @@index([deletionScheduled])
+  @@map("report_retentions")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────────
+
+enum RegulatoryReportType {
+  TRADE_REPORTING
+  SUSPICIOUS_ACTIVITY
+  COMPLIANCE_CERTIFICATION
+  QUARTERLY_FILING
+  ANNUAL_REPORT
+  AD_HOC_REPORT
+}
+
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  SUBMITTED
+  ACKNOWLEDGED
+  REJECTED
+  FAILED
+  ARCHIVED
+}
+
+enum ReportFormat {
+  XML
+  JSON
+  CSV
+  PDF
+  XBRL
+}
+
+enum SuspiciousActivityType {
+  LARGE_TRANSACTIONS
+  FREQUENT_SMALL_TRANSACTIONS
+  UNUSUAL_PATTERN
+  STRUCTURING
+  MONEY_LAUNDERING
+  TERRORIST_FINANCING
+  MARKET_MANIPULATION
+  INSIDER_TRADING
+  OTHER
+}
+
+enum SuspicionConfidence {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SARStatus {
+  PENDING
+  FILED
+  ACKNOWLEDGED
+  INVESTIGATION
+  RESOLVED
+  REJECTED
+}
+
+enum SARPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ComplianceCertificationType {
+  AML_PROGRAM
+  KYC_COMPLIANCE
+  TRANSACTION_MONITORING
+  REPORTING_ADEQUACY
+  RISK_ASSESSMENT
+  TRAINING_COMPLETION
+  SYSTEM_CONTROLS
+  DATA_INTEGRITY
+}
+
+enum ComplianceStatus {
+  PENDING
+  CERTIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum RegulatoryEntityType {
+  REPORT
+  TRADE_RECORD
+  SAR
+  COMPLIANCE_ITEM
+  EXAMINER_ACCESS
+  RETENTION_POLICY
+}
+
+enum RegulatoryAction {
+  CREATE
+  UPDATE
+  DELETE
+  SUBMIT
+  ACKNOWLEDGE
+  REJECT
+  ARCHIVE
+  RESTORE
+  ACCESS_GRANTED
+  ACCESS_REVOKED
+}
+
+enum ExaminerAccessLevel {
+  VIEW_ONLY
+  DOWNLOAD
+  EXPORT
+  FULL_ACCESS
+}
+
+enum ExaminerStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  REVOKED
+}
+
+enum ExaminerAction {
+  LOGIN
+  LOGOUT
+  VIEW_REPORT
+  DOWNLOAD_REPORT
+  EXPORT_DATA
+  ACCESS_DENIED
+  SYSTEM_EVENT
+}
+
+type DateTimeRange {
+  start DateTime
+  end   DateTime
+}
