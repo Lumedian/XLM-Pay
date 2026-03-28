@@ -1,8 +1,7 @@
 #![no_std]
 
 use shared::acl::ACL;
-use shared::governance::GovernanceRole;
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec, token};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, token};
 
 #[contract]
 pub struct FeeDistributionContract;
@@ -37,7 +36,6 @@ mod storage_keys {
     pub const INIT: Symbol = symbol_short!("init");
     pub const SPLITS: Symbol = symbol_short!("splits");
     pub const RECIPIENTS: Symbol = symbol_short!("recips");
-    pub const STATS: Symbol = symbol_short!("stats"); // Needs token-specific stats
 }
 
 #[contracttype]
@@ -58,6 +56,18 @@ pub enum FeeDistError {
 impl From<FeeDistError> for soroban_sdk::Error {
     fn from(error: FeeDistError) -> Self {
         soroban_sdk::Error::from_contract_error(error as u32)
+    }
+}
+
+impl From<&FeeDistError> for soroban_sdk::Error {
+    fn from(error: &FeeDistError) -> Self {
+        soroban_sdk::Error::from_contract_error(*error as u32)
+    }
+}
+
+impl From<soroban_sdk::Error> for FeeDistError {
+    fn from(_error: soroban_sdk::Error) -> Self {
+        FeeDistError::Unauthorized
     }
 }
 
@@ -100,7 +110,7 @@ impl FeeDistributionContract {
         
         // Emit event
         env.events().publish(
-            (symbol_short!("splits_u"),),
+            (Symbol::new(&env, "splits_u"),),
             splits
         );
         Ok(())
@@ -114,7 +124,7 @@ impl FeeDistributionContract {
         
         // Emit event
         env.events().publish(
-            (symbol_short!("recips_u"),),
+            (Symbol::new(&env, "recips_u"),),
             recipients
         );
         Ok(())
@@ -151,6 +161,19 @@ impl FeeDistributionContract {
         }
 
         _distribute(&env, &token, &env.current_contract_address(), amount)
+    }
+
+    pub fn get_splits(env: Env) -> Result<FeeSplits, FeeDistError> {
+        env.storage().persistent().get(&storage_keys::SPLITS).ok_or(FeeDistError::NotInitialized)
+    }
+
+    pub fn get_recipients(env: Env) -> Result<FeeRecipients, FeeDistError> {
+        env.storage().persistent().get(&storage_keys::RECIPIENTS).ok_or(FeeDistError::NotInitialized)
+    }
+
+    pub fn get_stats(env: Env, token: Address) -> FeeStats {
+        env.storage().persistent().get(&DataKey::Stats(token))
+            .unwrap_or(FeeStats { total_treasury: 0, total_staking: 0, total_burn: 0 })
     }
 }
 
@@ -194,25 +217,11 @@ fn _distribute(
 
         // Emit event
         env.events().publish(
-            (symbol_short!("fee_dist"), token.clone(), source.clone()),
+            (Symbol::new(env, "fee_dist"), token.clone(), source.clone()),
             (treasury_amount, staking_amount, burn_amount)
         );
 
         Ok(())
-    }
-
-    pub fn get_splits(env: Env) -> Result<FeeSplits, FeeDistError> {
-        env.storage().persistent().get(&storage_keys::SPLITS).ok_or(FeeDistError::NotInitialized)
-    }
-
-    pub fn get_recipients(env: Env) -> Result<FeeRecipients, FeeDistError> {
-        env.storage().persistent().get(&storage_keys::RECIPIENTS).ok_or(FeeDistError::NotInitialized)
-    }
-
-    pub fn get_stats(env: Env, token: Address) -> FeeStats {
-        env.storage().persistent().get(&DataKey::Stats(token))
-            .unwrap_or(FeeStats { total_treasury: 0, total_staking: 0, total_burn: 0 })
-    }
 }
 
 #[cfg(test)]

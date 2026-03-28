@@ -1,9 +1,8 @@
 #![cfg(test)]
 
-use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, Events},
-    vec, Env, Address,
+    testutils::Address as _,
+    Env, Address,
 };
 use crate::{FeeDistributionContract, FeeDistributionContractClient, FeeSplits, FeeRecipients};
 
@@ -38,12 +37,12 @@ fn test_initialization() {
     let env = Env::default();
     let (client, _admin, recipients) = setup_test(&env);
 
-    let splits = client.get_splits().unwrap();
+    let splits = client.get_splits();
     assert_eq!(splits.treasury_bps, 5000);
     assert_eq!(splits.staking_bps, 3000);
     assert_eq!(splits.burn_bps, 2000);
 
-    let stored_recipients = client.get_recipients().unwrap();
+    let stored_recipients = client.get_recipients();
     assert_eq!(stored_recipients.treasury, recipients.treasury);
     assert_eq!(stored_recipients.staking, recipients.staking);
     assert_eq!(stored_recipients.burn, recipients.burn);
@@ -53,7 +52,7 @@ fn test_initialization() {
 fn test_distribution() {
     let env = Env::default();
     env.mock_all_auths();
-    let (client, _admin, recipients) = setup_test(&env);
+    let (client, _admin, _recipients) = setup_test(&env);
 
     let payer = Address::generate(&env);
     let token_admin = Address::generate(&env);
@@ -84,7 +83,7 @@ fn test_set_splits() {
     };
 
     client.set_splits(&admin, &new_splits);
-    let splits = client.get_splits().unwrap();
+    let splits = client.get_splits();
     assert_eq!(splits.treasury_bps, 4000);
 }
 
@@ -109,7 +108,6 @@ fn test_distribute_held_fees() {
     let env = Env::default();
     env.mock_all_auths();
     let (client, _admin, _recipients) = setup_test(&env);
-    let contract_address = env.current_contract_address();
 
     let token_admin = Address::generate(&env);
     let token_id = env.register_stellar_asset_contract(token_admin.clone());
