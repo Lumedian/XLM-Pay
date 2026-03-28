@@ -37,6 +37,7 @@ import { validateEnv } from './config/env.validation';
 
 import { SupportModule } from './support/support.module';
 import { MultisigModule } from './multisig/multisig.module';
+import { ChaosModule } from './chaos/chaos.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { MultisigModule } from './multisig/multisig.module';
     ExperimentsModule,
     KycModule,
     CdpModule,
+    ChaosModule,
   ],
   controllers: [AppController, UserController, DocsController],
   providers: [AppService],
