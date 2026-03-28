@@ -2,6 +2,8 @@ import { AbiRegistryModule } from './abi-registry/abi-registry.module';
 import { ExperimentsModule } from './experiments/experiments.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { KycModule } from './kyc/kyc.module';
+import { CollateralModule } from './collateral/collateral.module';
+import { GeolocationModule } from './geolocation/geolocation.module';
 
 import { AdminModule } from './admin/admin.module';
 import { AppController } from './app.controller';
@@ -36,7 +38,7 @@ import { validateEnv } from './config/env.validation';
 
 import { SupportModule } from './support/support.module';
 import { MultisigModule } from './multisig/multisig.module';
-import { RegulatoryReportingModule } from './regulatory-reporting/regulatory-reporting.module';
+
 
 @Module({
   imports: [
@@ -93,8 +95,7 @@ import { RegulatoryReportingModule } from './regulatory-reporting/regulatory-rep
     AnalyticsModule,
     ExperimentsModule,
     KycModule,
-    RegulatoryReportingModule,
-  ],
+
   controllers: [AppController, UserController, DocsController],
   providers: [AppService],
 })
