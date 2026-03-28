@@ -43,6 +43,27 @@ pub struct RateLimitConfig {
     pub premium_user_limit: u32,
 }
 
+/// Event emitted when a message is sent
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MessageSent {
+    pub message_id: u64,
+    pub sender: Address,
+    pub recipient: Address,
+    pub timestamp: u64,
+    pub payload_length: u32,
+}
+
+/// Event emitted when a message is marked as read
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MessageRead {
+    pub message_id: u64,
+    pub recipient: Address,
+    pub sender: Address,
+    pub timestamp: u64,
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum MessagingError {
@@ -294,12 +315,14 @@ impl UpgradeableMessagingContract {
         let mut stats = get_stats_internal(&env);
         let message_id = stats.last_message_id + 1;
 
+        let current_timestamp = env.ledger().timestamp();
+
         let message = Message {
             id: message_id,
             sender: sender.clone(),
             recipient: recipient.clone(),
             payload,
-            timestamp: env.ledger().timestamp(),
+            timestamp: current_timestamp,
             read: false,
         };
 
@@ -322,7 +345,7 @@ impl UpgradeableMessagingContract {
 
         let mut unread_counts = get_unread_counts(&env);
         let unread_count = unread_counts.get(recipient.clone()).unwrap_or(0);
-        unread_counts.set(recipient, unread_count + 1);
+        unread_counts.set(recipient.clone(), unread_count + 1);
         env.storage()
             .persistent()
             .set(&symbol_short!("unread"), &unread_counts);
@@ -333,6 +356,18 @@ impl UpgradeableMessagingContract {
         env.storage()
             .persistent()
             .set(&symbol_short!("stats"), &stats);
+
+        // Emit MessageSent event
+        let message_sent_event = MessageSent {
+            message_id,
+            sender: sender.clone(),
+            recipient,
+            timestamp: current_timestamp,
+            payload_length: payload_len as u32,
+        };
+
+        env.events()
+            .publish((symbol_short!("msg_sent"),), message_sent_event);
 
         Ok(message_id)
     }
@@ -358,15 +393,17 @@ impl UpgradeableMessagingContract {
             return Err(MessagingError::AlreadyRead);
         }
 
+        let current_timestamp = env.ledger().timestamp();
+
         message.read = true;
-        messages.set(message_id, message);
+        messages.set(message_id, message.clone());
         env.storage()
             .persistent()
             .set(&symbol_short!("msgs"), &messages);
 
         let mut unread_counts = get_unread_counts(&env);
         let unread_count = unread_counts.get(recipient.clone()).unwrap_or(0);
-        unread_counts.set(recipient, unread_count.saturating_sub(1));
+        unread_counts.set(recipient.clone(), unread_count.saturating_sub(1));
         env.storage()
             .persistent()
             .set(&symbol_short!("unread"), &unread_counts);
@@ -376,6 +413,17 @@ impl UpgradeableMessagingContract {
         env.storage()
             .persistent()
             .set(&symbol_short!("stats"), &stats);
+
+        // Emit MessageRead event
+        let message_read_event = MessageRead {
+            message_id,
+            recipient,
+            sender: message.sender,
+            timestamp: current_timestamp,
+        };
+
+        env.events()
+            .publish((symbol_short!("msg_read"),), message_read_event);
 
         Ok(())
     }
@@ -571,6 +619,7 @@ impl UpgradeableMessagingContract {
         Ok(ACL::has_permission(&env, &user, &permission))
     }
 
+    #[allow(dead_code)]
     fn require_admin_role(env: &Env, admin: &Address) -> Result<(), MessagingError> {
         let roles: Map<Address, GovernanceRole> = env
             .storage()

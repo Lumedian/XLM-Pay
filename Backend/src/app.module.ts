@@ -2,6 +2,8 @@ import { AbiRegistryModule } from './abi-registry/abi-registry.module';
 import { ExperimentsModule } from './experiments/experiments.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { KycModule } from './kyc/kyc.module';
+import { CollateralModule } from './collateral/collateral.module';
+import { GeolocationModule } from './geolocation/geolocation.module';
 
 import { AdminModule } from './admin/admin.module';
 import { AppController } from './app.controller';
@@ -18,6 +20,7 @@ import { LifecycleModule } from './lifecycle/lifecycle.module';
 import { LoggingModule } from './logging/logging.module';
 import { Module } from '@nestjs/common';
 import { PaymentModule } from './payment/payment.module';
+import { FraudModule } from './fraud/fraud.module';
 import { PrismaModule } from './prisma.module';
 import { QuotaModule } from './quota/quota.module';
 import { RabbitmqModule } from './messaging/rabbitmq/rabbitmq.module';
@@ -36,8 +39,6 @@ import { validateEnv } from './config/env.validation';
 
 import { SupportModule } from './support/support.module';
 import { MultisigModule } from './multisig/multisig.module';
-import { RegulatoryReportingModule } from './regulatory-reporting/regulatory-reporting.module';
-import { ChaosEngineeringModule } from './chaos-engineering/chaos-engineering.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { ChaosEngineeringModule } from './chaos-engineering/chaos-engineering.mo
     AuthModule,
     WebsocketModule,
     PaymentModule,
+    FraudModule,
     // Backup and disaster recovery module
     BackupModule,
     QuotaModule,
@@ -94,10 +96,9 @@ import { ChaosEngineeringModule } from './chaos-engineering/chaos-engineering.mo
     AnalyticsModule,
     ExperimentsModule,
     KycModule,
-    RegulatoryReportingModule,
-    ChaosEngineeringModule,
+
   ],
   controllers: [AppController, UserController, DocsController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
