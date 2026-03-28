@@ -1,24 +1,58 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { createHash } from 'node:crypto';
 import { SessionService } from '../sessions/session.service';
 import { RedisService } from '../redis/redis.service';
+import { GeolocationService } from '../geolocation/geolocation.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private jwtService: JwtService,
     private configService: ConfigService,
     private readonly sessionService: SessionService,
     private readonly redisService: RedisService,
+    private readonly geoService: GeolocationService,
   ) {}
 
   async login(walletAddress: string, request: Request) {
+    const ip = request.ip || request.socket.remoteAddress || '127.0.0.1';
+    const userAgent = request.headers['user-agent'];
+    const userId = this.deriveUserId(walletAddress);
+
+    // Track location and perform security checks
+    const location = await this.geoService.trackUserLocation(userId, ip, userAgent);
+    
+    if (location) {
+      if (this.geoService.isSanctioned(location.country)) {
+        this.logger.warn(`Blocked login attempt from sanctioned country ${location.country} for user ${userId}`);
+        throw new ForbiddenException('Access from your location is restricted');
+      }
+
+      if (location.isVpn || location.isTor || location.isProxy) {
+        this.logger.warn(`High-risk connection detected (VPN/Tor/Proxy) for user ${userId} from IP ${ip}`);
+        // Optional: Trigger step-up auth or just log
+      }
+
+      const isImpossibleTravel = await this.geoService.checkImpossibleTravel(
+        userId, 
+        location.latitude, 
+        location.longitude
+      );
+      
+      if (isImpossibleTravel) {
+        this.logger.error(`Impossible travel detected for user ${userId}. Current location: ${location.city}, ${location.country}`);
+        // In a real app, we might send an alert or lock the account
+      }
+    }
+
     const subscriptionTier = this.resolveSubscriptionTier(request);
     const user = {
-      id: this.deriveUserId(walletAddress),
+      id: userId,
       walletAddress,
       roles: this.resolveRoles(subscriptionTier),
     };

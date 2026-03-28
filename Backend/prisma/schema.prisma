@@ -50,12 +50,7 @@ model User {
   tenantMembers       TenantMember[]
   experimentAssignments ExperimentAssignment[]
   verificationSessions VerificationSession[]
-  
-  // CDP Relations
-  cdpEvents            CdpEvent[]           @relation("CdpEvents")
-  cdpSegmentMemberships CdpSegmentMembership[] @relation("CdpSegmentMemberships")
-  cdpIdentityMatches   CdpIdentityMatch[]    @relation("CdpIdentityMatches")
-  cdpConsents          CdpConsent[]          @relation("CdpConsents")
+
 
   @@unique([tenantId, email])
   @@unique([tenantId, walletAddress])
@@ -63,6 +58,124 @@ model User {
   @@index([tenantId, email])
   @@index([tenantId, walletAddress])
   @@map("users")
+}
+
+model UserLocation {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress       String   @map("ip_address")
+  country         String?
+  region          String?
+  city            String?
+  latitude        Float?
+  longitude       Float?
+  isp             String?
+  isVpn           Boolean  @default(false) @map("is_vpn")
+  isTor           Boolean  @default(false) @map("is_tor")
+  isProxy         Boolean  @default(false) @map("is_proxy")
+  userAgent       String?  @map("user_agent")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([ipAddress])
+  @@map("user_locations")
+}
+
+model CollateralAsset {
+  id              String   @id @default(cuid())
+  symbol          String   @unique
+  name            String
+  haircut         Decimal  @db.Decimal(5, 4) // e.g., 0.10 for 10% haircut
+  isLiquidatable  Boolean  @default(true)
+  minPledgeAmount Decimal  @db.Decimal(18, 4)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  pledges         CollateralPledge[]
+
+  @@map("collateral_assets")
+}
+
+model MarginAccount {
+  id                String   @id @default(cuid())
+  userId            String   @unique @map("user_id")
+  user              User     @relation(fields: [userId], references: [id])
+  totalBorrowed     Decimal  @default(0) @db.Decimal(18, 4) @map("total_borrowed")
+  totalCollateralUsd Decimal  @default(0) @db.Decimal(18, 4) @map("total_collateral_usd")
+  ltvRatio          Decimal  @default(0) @db.Decimal(5, 4) @map("ltv_ratio") // current Loan-to-Value
+  healthFactor      Decimal  @default(1.0) @db.Decimal(5, 4) @map("health_factor")
+  lastMarginCallAt  DateTime? @map("last_margin_call_at")
+  status            MarginAccountStatus @default(HEALTHY)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  pledges           CollateralPledge[]
+  loans             Loan[]
+  liquidations      Liquidation[]
+
+  @@map("margin_accounts")
+}
+
+model CollateralPledge {
+  id                String   @id @default(cuid())
+  marginAccountId   String   @map("margin_account_id")
+  marginAccount     MarginAccount @relation(fields: [marginAccountId], references: [id])
+  assetSymbol       String   @map("asset_symbol")
+  asset             CollateralAsset @relation(fields: [assetSymbol], references: [symbol])
+  amount            Decimal  @db.Decimal(18, 4)
+  lockedAmount      Decimal  @default(0) @db.Decimal(18, 4) @map("locked_amount")
+  lastValuationUsd  Decimal? @db.Decimal(18, 4) @map("last_valuation_usd")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([marginAccountId, assetSymbol])
+  @@map("collateral_pledges")
+}
+
+model Loan {
+  id                String   @id @default(cuid())
+  marginAccountId   String   @map("margin_account_id")
+  marginAccount     MarginAccount @relation(fields: [marginAccountId], references: [id])
+  assetSymbol       String   @map("asset_symbol")
+  amount            Decimal  @db.Decimal(18, 4)
+  interestRate      Decimal  @db.Decimal(5, 4) @map("interest_rate")
+  accruedInterest   Decimal  @default(0) @db.Decimal(18, 4) @map("accrued_interest")
+  lastInterestAccrual DateTime @default(now()) @map("last_interest_accrual")
+  status            LoanStatus @default(ACTIVE)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("loans")
+}
+
+model Liquidation {
+  id                String   @id @default(cuid())
+  marginAccountId   String   @map("margin_account_id")
+  marginAccount     MarginAccount @relation(fields: [marginAccountId], references: [id])
+  liquidatorAddress String   @map("liquidator_address")
+  collateralSymbol  String   @map("collateral_symbol")
+  collateralAmount  Decimal  @db.Decimal(18, 4) @map("collateral_amount")
+  loanSymbol        String   @map("loan_symbol")
+  loanAmount        Decimal  @db.Decimal(18, 4) @map("loan_amount")
+  liquidationFee    Decimal  @db.Decimal(18, 4) @map("liquidation_fee")
+  timestamp         DateTime @default(now())
+
+  @@map("liquidations")
+}
+
+enum MarginAccountStatus {
+  HEALTHY
+  MARGIN_CALL
+  LIQUIDATION_PENDING
+  LIQUIDATED
+}
+
+enum LoanStatus {
+  ACTIVE
+  PAID
+  LIQUIDATED
 }
 
 model Project {
@@ -180,9 +293,18 @@ model ProcessedEvent {
   abiVersion      String?  @map("abi_version")
   processedAt     DateTime @default(now()) @map("processed_at")
 
-  @@index([network, ledgerSeq])
   @@index([contractId, eventType])
   @@map("processed_events")
+}
+
+model LedgerHeader {
+  sequence  Int      @id
+  hash      String   @unique
+  prevHash  String   @map("prev_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([sequence])
+  @@map("ledger_headers")
 }
 
 model ContractAbiRegistry {
@@ -252,6 +374,9 @@ model NotificationSetting {
   notifyContributions Boolean  @default(true) @map("notify_contributions")
   notifyMilestones    Boolean  @default(true) @map("notify_milestones")
   notifyDeadlines     Boolean  @default(true) @map("notify_deadlines")
+  channelPreferences  Json?    @map("channel_preferences")
+  dailyLimit          Int      @default(5) @map("daily_limit")
+  unsubscribeToken    String?  @map("unsubscribe_token")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
@@ -259,19 +384,121 @@ model NotificationSetting {
 }
 
 model Notification {
-  id         String                 @id @default(cuid())
-  userId     String                 @map("user_id")
-  user       User                   @relation(fields: [userId], references: [id])
-  type       NotificationType
-  title      String
-  message    String
-  read       Boolean                @default(false)
-  data       Json? // Optional metadata (e.g., projectId)
-  createdAt  DateTime               @default(now()) @map("created_at")
-  deliveries NotificationDelivery[]
+  id          String                 @id @default(cuid())
+  userId      String                 @map("user_id")
+  user        User                   @relation(fields: [userId], references: [id])
+  type        NotificationType
+  title       String
+  message     String
+  read        Boolean                @default(false)
+  data        Json? // Optional metadata (e.g., projectId)
+  status      NotificationStatus     @default(SENT)
+  scheduledAt DateTime?              @map("scheduled_at")
+  variant     String?
+  critical    Boolean                @default(false)
+  openCount   Int                    @default(0) @map("open_count")
+  clickCount  Int                    @default(0) @map("click_count")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  deliveries  NotificationDelivery[]
 
   @@index([userId])
   @@map("notifications")
+}
+
+// Clearing house models for CCP functionality
+model ClearingMarginAccount {
+  id        String   @id @default(cuid())
+  memberId  String   @unique @map("member_id")
+  // relation to application user
+  member    User     @relation(fields: [memberId], references: [id])
+  initial   Decimal  @default(0) @db.Decimal(18, 4)
+  variation Decimal  @default(0) @db.Decimal(18, 4)
+  balance   Decimal  @default(0) @db.Decimal(18, 4)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("clearing_margin_accounts")
+}
+
+model ClearingPosition {
+  id           String   @id @default(cuid())
+  tradeId      String   @map("trade_id")
+  memberId     String   @map("member_id")
+  instrument   String
+  quantity     Decimal  @db.Decimal(18, 4)
+  avgPrice     Decimal  @db.Decimal(18, 4)
+  unrealizedPnl Decimal @default(0) @db.Decimal(18, 4) @map("unrealized_pnl")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([tradeId])
+  @@index([memberId])
+  @@map("clearing_positions")
+}
+
+model DefaultFundContribution {
+  id        String   @id @default(cuid())
+  memberId  String   @map("member_id")
+  member    User     @relation(fields: [memberId], references: [id])
+  amount    Decimal  @db.Decimal(18, 4)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("default_fund_contributions")
+}
+
+model ClearingSettlement {
+  id             String   @id @default(cuid())
+  instrument     String
+  totalVariation Decimal  @db.Decimal(18, 4) @map("total_variation")
+  details        Json?
+  settledAt      DateTime @map("settled_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("clearing_settlements")
+}
+
+model ClearingAuction {
+  id          String   @id @default(cuid())
+  defaulterId String   @map("defaulter_id")
+  status      String   @default("OPEN")
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("clearing_auctions")
+}
+
+// Document processing models
+model Document {
+  id         String   @id @default(cuid())
+  filename   String
+  filepath   String
+  status     String   @default("queued")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  extractions DocumentExtraction[]
+  audits     AuditLog[]
+  @@map("documents")
+}
+
+model DocumentExtraction {
+  id         String   @id @default(cuid())
+  documentId String   @map("document_id")
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  field      String
+  value      String
+  confidence Decimal  @db.Decimal(5,4)
+  createdAt  DateTime @default(now()) @map("created_at")
+  @@map("document_extractions")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  documentId String?  @map("document_id")
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  action     String
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  @@map("audit_logs")
 }
 
 model NotificationDelivery {
@@ -281,6 +508,8 @@ model NotificationDelivery {
   channel        NotificationChannel
   status         DeliveryStatus      @default(PENDING)
   errorMessage   String?             @map("error_message")
+  openedAt       DateTime?           @map("opened_at")
+  clickedAt      DateTime?           @map("clicked_at")
   attempts       Int                 @default(0)
   lastAttemptAt  DateTime?           @map("last_attempt_at")
   createdAt      DateTime            @default(now()) @map("created_at")
@@ -294,6 +523,12 @@ enum NotificationChannel {
   SMS
   PUSH
   WEBSOCKET
+}
+
+enum NotificationStatus {
+  SCHEDULED
+  SENT
+  SKIPPED
 }
 
 enum DeliveryStatus {
@@ -979,10 +1214,13 @@ model Subscription {
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
 
-  invoices        Invoice[]
-  usageRecords    UsageRecord[]
-  paymentEvents   PaymentEvent[]
-  dunningAttempts DunningAttempt[]
+  invoices            Invoice[]
+  usageRecords        UsageRecord[]
+  paymentEvents       PaymentEvent[]
+  dunningAttempts     DunningAttempt[]
+  revenueRecognitions RevenueRecognition[]
+  prorationAdjustments ProrationAdjustment[]
+  billingCycleAnchor  DateTime?          @map("billing_cycle_anchor")
 
   @@index([tenantId])
   @@index([status])
@@ -1025,6 +1263,8 @@ model Invoice {
   paidAt           DateTime?     @map("paid_at")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  revenueRecognitions RevenueRecognition[]
 
   @@index([subscriptionId])
   @@index([tenantId])
@@ -1259,159 +1499,3 @@ enum DocumentType {
   NATIONAL_ID
 }
 
-// CDP (Customer Data Platform) Models
-enum CdpEventType {
-  PAGE_VIEW
-  CLICK
-  FORM_SUBMIT
-  PURCHASE
-  LOGIN
-  SIGNUP
-  CUSTOM
-}
-
-enum CdpEventSource {
-  WEB
-  MOBILE
-  BACKEND
-}
-
-enum CdpSegmentType {
-  SQL
-  VISUAL
-  BEHAVIORAL
-  DEMOGRAPHIC
-}
-
-enum CdpConsentType {
-  MARKETING
-  ANALYTICS
-  PERSONALIZATION
-  ESSENTIAL
-}
-
-enum CdpIdentityMatchType {
-  EMAIL
-  PHONE
-  WALLET
-  SESSION
-  FINGERPRINT
-}
-
-model CdpEvent {
-  id            String          @id @default(cuid())
-  anonymousId   String?         @map("anonymous_id")
-  userId        String?         @map("user_id")
-  user          User?           @relation("CdpEvents", fields: [userId], references: [id], onDelete: Cascade)
-  type          CdpEventType
-  source        CdpEventSource
-  eventName     String          @map("event_name")
-  properties    Json
-  sessionId     String?         @map("session_id")
-  ipAddress     String?         @map("ip_address")
-  userAgent     String?         @map("user_agent")
-  referrer      String?         @map("referrer")
-  tenantId      String?         @map("tenant_id")
-  timestamp     DateTime
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
-
-  @@index([userId])
-  @@index([anonymousId])
-  @@index([timestamp])
-  @@index([eventName])
-  @@index([tenantId])
-  @@map("cdp_events")
-}
-
-model CdpSegment {
-  id            String          @id @default(cuid())
-  name          String
-  description   String?
-  type          CdpSegmentType
-  sqlQuery      String?         @map("sql_query")
-  visualConfig  Json?           @map("visual_config")
-  conditions    Json?           // Array of condition objects
-  tenantId      String?         @map("tenant_id")
-  isActive      Boolean         @default(true) @map("is_active")
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
-
-  memberships   CdpSegmentMembership[]
-  
-  @@index([tenantId])
-  @@index([isActive])
-  @@map("cdp_segments")
-}
-
-model CdpSegmentMembership {
-  id        String   @id @default(cuid())
-  segmentId String   @map("segment_id")
-  segment   CdpSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
-  userId    String   @map("user_id")
-  user      User     @relation("CdpSegmentMemberships", fields: [userId], references: [id], onDelete: Cascade)
-  isActive  Boolean  @default(true) @map("is_active")
-  joinedAt  DateTime @default(now()) @map("joined_at")
-  leftAt    DateTime? @map("left_at")
-
-  @@unique([segmentId, userId])
-  @@index([userId])
-  @@index([segmentId])
-  @@map("cdp_segment_memberships")
-}
-
-model CdpIdentityMatch {
-  id          String                @id @default(cuid())
-  anonymousId String                @map("anonymous_id")
-  userId      String                @map("user_id")
-  user        User                  @relation("CdpIdentityMatches", fields: [userId], references: [id], onDelete: Cascade)
-  matchType   CdpIdentityMatchType  @map("match_type")
-  confidence  Float
-  tenantId    String?               @map("tenant_id")
-  createdAt   DateTime              @default(now()) @map("created_at")
-  updatedAt   DateTime              @updatedAt @map("updated_at")
-
-  @@index([anonymousId])
-  @@index([userId])
-  @@index([confidence])
-  @@map("cdp_identity_matches")
-}
-
-model CdpConsent {
-  id        String        @id @default(cuid())
-  userId    String        @map("user_id")
-  user      User          @relation("CdpConsents", fields: [userId], references: [id], onDelete: Cascade)
-  type      CdpConsentType
-  granted   Boolean
-  channel   String?       // email, push, sms, etc.
-  purpose   String?       // specific purpose description
-  ipAddress String?        @map("ip_address")
-  userAgent String?        @map("user_agent")
-  createdAt DateTime      @default(now()) @map("created_at")
-  updatedAt DateTime      @updatedAt @map("updated_at")
-
-  @@unique([userId, type, channel])
-  @@index([userId])
-  @@map("cdp_consents")
-}
-
-// Audit Log Model
-model AuditLog {
-  id          String   @id @default(cuid())
-  userId      String?  @map("user_id")
-  action      String   // CONSENT_UPDATE, SEGMENT_CHANGE, etc.
-  entityType  String   @map("entity_type") // CDP_CONSENT, CDP_SEGMENT, etc.
-  entityId    String   @map("entity_id")
-  oldValue    Json?    @map("old_value")
-  newValue    Json?    @map("new_value")
-  metadata    Json?    // Additional context
-  ipAddress   String?  @map("ip_address")
-  userAgent   String?  @map("user_agent")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  @@index([userId])
-  @@index([action])
-  @@index([entityType])
-  @@index([createdAt])
-  @@map("audit_logs")
-}

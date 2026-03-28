@@ -60,6 +60,31 @@ pub struct RateLimitConfig {
     pub premium_user_limit: u32,
 }
 
+/// Event emitted when a trade is executed
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct TradeExecuted {
+    pub trade_id: u64,
+    pub trader: Address,
+    pub pair: Symbol,
+    pub signed_amount: i128,
+    pub price: i128,
+    pub timestamp: u64,
+    pub is_buy: bool,
+}
+
+/// Event emitted when fees are collected
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct FeeCollected {
+    pub trade_id: u64,
+    pub trader: Address,
+    pub fee_amount: i128,
+    pub fee_recipient: Address,
+    pub fee_token: Address,
+    pub timestamp: u64,
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum TradeError {
@@ -266,6 +291,8 @@ impl UpgradeableTradingContract {
             return Err(TradeError::ContractPaused);
         }
 
+        let current_timestamp = env.ledger().timestamp();
+
         FeeManager::collect_fee(&env, &fee_token, &trader, &fee_recipient, fee_amount)
             .map_err(|_| TradeError::InsufficientBalance)?;
 
@@ -275,10 +302,10 @@ impl UpgradeableTradingContract {
         let trade = Trade {
             id: trade_id,
             trader: trader.clone(),
-            pair,
+            pair: pair.clone(),
             signed_amount,
             price,
-            timestamp: env.ledger().timestamp(),
+            timestamp: current_timestamp,
         };
 
         let trade_key = (symbol_short!("trade"), trade_id);
@@ -294,6 +321,29 @@ impl UpgradeableTradingContract {
 
         storage.set(&storage_keys::TRADE_COUNT, &trade_id);
         storage.set(&storage_keys::STATS, &stats);
+
+        // Emit FeeCollected event
+        let fee_event = FeeCollected {
+            trade_id,
+            trader: trader.clone(),
+            fee_amount,
+            fee_recipient,
+            fee_token,
+            timestamp: current_timestamp,
+        };
+        env.events().publish((symbol_short!("fee_col"),), fee_event);
+
+        // Emit TradeExecuted event
+        let trade_event = TradeExecuted {
+            trade_id,
+            trader,
+            pair,
+            signed_amount,
+            price,
+            timestamp: current_timestamp,
+            is_buy,
+        };
+        env.events().publish((symbol_short!("trade"),), trade_event);
 
         Ok(trade_id)
     }

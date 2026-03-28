@@ -18,11 +18,18 @@ export class EmailService {
         return;
       }
 
+      const appUrl = process.env.APP_URL || 'https://app.stellara.network';
+      const fromEmail = process.env.SENDGRID_FROM_EMAIL || 'noreply@novafund.xyz';
+      const unsubscribeUrl = `${appUrl}/notifications/unsubscribe/${encodeURIComponent(to)}`;
       const msg = {
         to,
-        from: process.env.SENDGRID_FROM_EMAIL || 'noreply@novafund.xyz',
+        from: fromEmail,
         subject,
-        html,
+        html: `${html}<p style="font-size:0.85em;color:#666;margin-top:24px;">If you no longer wish to receive this email, <a href="${unsubscribeUrl}">unsubscribe here</a>.</p>`,
+        headers: {
+          'List-Unsubscribe': `<mailto:${fromEmail}>, <${unsubscribeUrl}>`,
+          'List-Unsubscribe-Post': 'One-Click',
+        },
       };
 
       await sgMail.send(msg);
