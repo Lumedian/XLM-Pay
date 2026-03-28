@@ -37,6 +37,7 @@ import { validateEnv } from './config/env.validation';
 import { SupportModule } from './support/support.module';
 import { MultisigModule } from './multisig/multisig.module';
 import { RegulatoryReportingModule } from './regulatory-reporting/regulatory-reporting.module';
+import { ChaosEngineeringModule } from './chaos-engineering/chaos-engineering.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { RegulatoryReportingModule } from './regulatory-reporting/regulatory-rep
     ExperimentsModule,
     KycModule,
     RegulatoryReportingModule,
+    ChaosEngineeringModule,
   ],
   controllers: [AppController, UserController, DocsController],
   providers: [AppService],
