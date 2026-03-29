@@ -1,6 +1,8 @@
 #![no_std]
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol,
+};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -21,20 +23,20 @@ pub enum Error {
 #[derive(Clone)]
 pub struct CDP {
     pub owner: Address,
-    pub collateral_amount: i128,   // in base units
-    pub minted_amount: i128,       // synthetic tokens minted
-    pub collateral_ratio: i128,    // scaled by 10000 (15000 = 150%)
+    pub collateral_amount: i128, // in base units
+    pub minted_amount: i128,     // synthetic tokens minted
+    pub collateral_ratio: i128,  // scaled by 10000 (15000 = 150%)
     pub is_active: bool,
 }
 
 #[contracttype]
 #[derive(Clone)]
 pub struct SyntheticConfig {
-    pub oracle_price: i128,        // price scaled by 1_000_000
-    pub min_cratio: i128,          // scaled by 10000 (15000 = 150%)
-    pub liq_cratio: i128,          // scaled by 10000 (12000 = 120%)
-    pub liq_penalty: i128,         // scaled by 10000 (1300 = 13%)
-    pub stability_fee_bps: i32,    // annual fee in bps (200 = 2%)
+    pub oracle_price: i128,     // price scaled by 1_000_000
+    pub min_cratio: i128,       // scaled by 10000 (15000 = 150%)
+    pub liq_cratio: i128,       // scaled by 10000 (12000 = 120%)
+    pub liq_penalty: i128,      // scaled by 10000 (1300 = 13%)
+    pub stability_fee_bps: i32, // annual fee in bps (200 = 2%)
     pub total_minted: i128,
     pub is_active: bool,
 }
@@ -172,7 +174,9 @@ impl SyntheticAssetsContract {
         updated_config.total_minted += mint_amount;
 
         env.storage().persistent().set(&cdp_key, &cdp);
-        env.storage().persistent().set(&asset_symbol, &updated_config);
+        env.storage()
+            .persistent()
+            .set(&asset_symbol, &updated_config);
 
         Ok(new_minted)
     }
@@ -221,7 +225,9 @@ impl SyntheticAssetsContract {
         updated_config.total_minted -= burn_amount;
 
         env.storage().persistent().set(&cdp_key, &cdp);
-        env.storage().persistent().set(&asset_symbol, &updated_config);
+        env.storage()
+            .persistent()
+            .set(&asset_symbol, &updated_config);
         Ok(())
     }
 
@@ -290,7 +296,9 @@ impl SyntheticAssetsContract {
 
         // Seize collateral with penalty: seized = debt_usd * (1 + penalty) / collateral_price
         let penalty_collateral = cdp.collateral_amount * config.liq_penalty / 10000;
-        let seized = cdp.collateral_amount.min(cdp.collateral_amount - penalty_collateral);
+        let seized = cdp
+            .collateral_amount
+            .min(cdp.collateral_amount - penalty_collateral);
 
         let mut updated_config = config;
         updated_config.total_minted -= cdp.minted_amount;
@@ -300,17 +308,15 @@ impl SyntheticAssetsContract {
         cdp.collateral_amount = 0;
 
         env.storage().persistent().set(&cdp_key, &cdp);
-        env.storage().persistent().set(&asset_symbol, &updated_config);
+        env.storage()
+            .persistent()
+            .set(&asset_symbol, &updated_config);
 
         Ok(seized)
     }
 
     /// Close a CDP with zero debt
-    pub fn close_cdp(
-        env: Env,
-        owner: Address,
-        asset_symbol: Symbol,
-    ) -> Result<i128, Error> {
+    pub fn close_cdp(env: Env, owner: Address, asset_symbol: Symbol) -> Result<i128, Error> {
         owner.require_auth();
 
         let cdp_key = Self::cdp_key(&owner, &asset_symbol);

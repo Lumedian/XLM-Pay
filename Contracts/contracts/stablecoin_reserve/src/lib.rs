@@ -1,19 +1,20 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec, Map, BytesN, 
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
+    Symbol, Vec,
 };
 
-mod reserve_tracking;
+mod custodian_integration;
 mod proof_of_reserves;
 mod rebalancing;
-mod regulatory_reporting;
-mod custodian_integration;
 mod redemption;
+mod regulatory_reporting;
+mod reserve_tracking;
 
 #[cfg(test)]
 mod test;
 
-use shared::governance::{GovernanceRole, UpgradeProposal, ProposalStatus};
+use shared::governance::{GovernanceRole, ProposalStatus, UpgradeProposal};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -97,16 +98,18 @@ impl StablecoinReserveContract {
     ) {
         // Initialize governance
         shared::governance::initialize_governance(env.clone(), admin, approvers, executor);
-        
+
         // Set stablecoin address
-        env.storage().instance().set(&symbol_short!("stablecoin"), &stablecoin_address);
-        
+        env.storage()
+            .instance()
+            .set(&symbol_short!("stablecoin"), &stablecoin_address);
+
         // Initialize reserve tracking
         reserve_tracking::initialize(env.clone());
-        
+
         // Initialize rebalancing with 5% threshold
         rebalancing::initialize(env.clone(), 500); // 5% in basis points
-        
+
         // Log initialization
         env.events().publish(
             (symbol_short!("reserve"), symbol_short!("initialized")),
@@ -127,7 +130,13 @@ impl StablecoinReserveContract {
             return Err(ReserveError::Unauthorized);
         }
 
-        reserve_tracking::add_asset(env.clone(), asset_type, amount, custodian, verification_hash)
+        reserve_tracking::add_asset(
+            env.clone(),
+            asset_type,
+            amount,
+            custodian,
+            verification_hash,
+        )
     }
 
     /// Update reserve asset amount
@@ -204,7 +213,8 @@ impl StablecoinReserveContract {
     /// Request redemption for large holders ($1M+)
     pub fn request_redemption(env: Env, amount: u128) -> Result<u64, ReserveError> {
         // Check minimum amount ($1M equivalent in smallest units)
-        if amount < 1_000_000_000_000 { // Assuming 12 decimals
+        if amount < 1_000_000_000_000 {
+            // Assuming 12 decimals
             return Err(ReserveError::RedemptionAmountTooSmall);
         }
 
@@ -237,7 +247,10 @@ impl StablecoinReserveContract {
     }
 
     /// Get redemption request status
-    pub fn get_redemption_status(env: Env, request_id: u64) -> Result<RedemptionRequest, ReserveError> {
+    pub fn get_redemption_status(
+        env: Env,
+        request_id: u64,
+    ) -> Result<RedemptionRequest, ReserveError> {
         redemption::get_redemption_request(env.clone(), request_id)
     }
 
