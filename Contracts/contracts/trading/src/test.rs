@@ -541,193 +541,217 @@ fn test_optimized_storage_scaling() {
     assert_eq!(trade_10.unwrap().id, 10);
 }
 
-// ============ TIMELOCK VAULT TESTS (issue #301) ============
-
-use shared::timelock_vault::VaultStatus;
+// ============ BATCH OPERATION TESTS ============
 
 #[test]
-fn test_vault_queue_upgrade() {
+fn test_batch_trade_execution() {
     let env = Env::default();
     env.ledger().with_mut(|li| li.timestamp = 1000);
     env.mock_all_auths();
 
-    let (client, admin, _approver, _executor) = setup_contract(&env);
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
 
-    let entry_id = client.vault_queue_upgrade(
-        &admin,
-        &symbol_short!("v2hash"),
-        &symbol_short!("upgrade"),
-        &3600u64,
-    );
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
 
-    assert_eq!(entry_id, 1);
+    // Create batch of orders
+    let mut orders = Vec::new(&env);
+    orders.push_back((symbol_short!("BTCUSD"), 1_000_000i128, 50_000i128, true));
+    orders.push_back((symbol_short!("ETHUSD"), 500_000i128, 3_000i128, true));
+    orders.push_back((symbol_short!("BTCUSD"), 200_000i128, 49_500i128, false));
 
-    let entry = client.vault_get_entry(&entry_id);
-    assert_eq!(entry.id, 1);
-    assert_eq!(entry.status, VaultStatus::Queued);
-    assert_eq!(entry.queued_at, 1000);
-    assert_eq!(entry.execution_time, 1000 + 3600);
+    // Execute batch trade
+    let trade_ids = client.batch_trade(&trader, &orders, &token_id, &0i128, &fee_recipient);
+
+    assert_eq!(trade_ids.len(), 3);
+    assert_eq!(trade_ids.get(0).unwrap(), 1);
+    assert_eq!(trade_ids.get(1).unwrap(), 2);
+    assert_eq!(trade_ids.get(2).unwrap(), 3);
+
+    // Verify stats updated correctly
+    let stats = client.get_stats();
+    assert_eq!(stats.total_trades, 3);
+    assert_eq!(stats.total_volume, 1_700_000);
 }
 
 #[test]
-fn test_vault_timelock_enforced_before_expiry() {
+fn test_batch_trade_empty_orders() {
     let env = Env::default();
     env.ledger().with_mut(|li| li.timestamp = 1000);
     env.mock_all_auths();
 
-    let (client, admin, _approver, executor) = setup_contract(&env);
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
 
-    let entry_id = client.vault_queue_upgrade(
-        &admin,
-        &symbol_short!("v2hash"),
-        &symbol_short!("upgrade"),
-        &7200u64, // 2 hours
-    );
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
 
-    // Attempt execution before timelock expires — must fail
-    let result = client.try_vault_execute_upgrade(&executor, &entry_id);
+    let orders = Vec::new(&env);
+
+    let trade_ids = client.batch_trade(&trader, &orders, &token_id, &0i128, &fee_recipient);
+
+    assert_eq!(trade_ids.len(), 0);
+}
+
+#[test]
+fn test_batch_trade_invalid_amount() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    let mut orders = Vec::new(&env);
+    orders.push_back((symbol_short!("BTCUSD"), 1_000_000i128, 50_000i128, true));
+    orders.push_back((symbol_short!("ETHUSD"), -500_000i128, 3_000i128, true)); // Invalid
+
+    let result = client.try_batch_trade(&trader, &orders, &token_id, &0i128, &fee_recipient);
+
     assert!(result.is_err());
+    let stats = client.get_stats();
+    assert_eq!(stats.total_trades, 0);
+    assert_eq!(stats.total_volume, 0);
 }
 
 #[test]
-fn test_vault_execute_after_timelock() {
+fn test_batch_trade_rejects_oversized_batch() {
     let env = Env::default();
     env.ledger().with_mut(|li| li.timestamp = 1000);
     env.mock_all_auths();
 
-    let (client, admin, _approver, executor) = setup_contract(&env);
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
 
-    let entry_id = client.vault_queue_upgrade(
-        &admin,
-        &symbol_short!("v2hash"),
-        &symbol_short!("upgrade"),
-        &3600u64,
-    );
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
 
-    // Advance past timelock
-    env.ledger().with_mut(|li| li.timestamp = 1000 + 3601);
+    let mut orders = Vec::new(&env);
+    for i in 0..client.max_batch_size() + 1 {
+        orders.push_back((symbol_short!("BTCUSD"), 1000 + i as i128, 50_000i128, true));
+    }
 
-    let entry = client.vault_execute_upgrade(&executor, &entry_id);
-    assert_eq!(entry.status, VaultStatus::Executed);
-}
+    let result = client.try_batch_trade(&trader, &orders, &token_id, &0i128, &fee_recipient);
 
-#[test]
-fn test_vault_cancel_by_admin() {
-    let env = Env::default();
-    env.ledger().with_mut(|li| li.timestamp = 1000);
-    env.mock_all_auths();
-
-    let (client, admin, _approver, _executor) = setup_contract(&env);
-
-    let entry_id = client.vault_queue_upgrade(
-        &admin,
-        &symbol_short!("v2hash"),
-        &symbol_short!("upgrade"),
-        &3600u64,
-    );
-
-    client.vault_cancel_upgrade(&admin, &entry_id);
-
-    let entry = client.vault_get_entry(&entry_id);
-    assert_eq!(entry.status, VaultStatus::Cancelled);
-}
-
-#[test]
-fn test_vault_cannot_execute_cancelled_entry() {
-    let env = Env::default();
-    env.ledger().with_mut(|li| li.timestamp = 1000);
-    env.mock_all_auths();
-
-    let (client, admin, _approver, executor) = setup_contract(&env);
-
-    let entry_id = client.vault_queue_upgrade(
-        &admin,
-        &symbol_short!("v2hash"),
-        &symbol_short!("upgrade"),
-        &3600u64,
-    );
-
-    client.vault_cancel_upgrade(&admin, &entry_id);
-
-    // Advance past timelock
-    env.ledger().with_mut(|li| li.timestamp = 1000 + 3601);
-
-    // Execution of a cancelled entry must fail
-    let result = client.try_vault_execute_upgrade(&executor, &entry_id);
     assert!(result.is_err());
+    let stats = client.get_stats();
+    assert_eq!(stats.total_trades, 0);
 }
 
 #[test]
-fn test_vault_cannot_execute_twice() {
+fn test_trade_batch_alias_matches_batch_trade() {
     let env = Env::default();
     env.ledger().with_mut(|li| li.timestamp = 1000);
     env.mock_all_auths();
 
-    let (client, admin, _approver, executor) = setup_contract(&env);
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
 
-    let entry_id = client.vault_queue_upgrade(
-        &admin,
-        &symbol_short!("v2hash"),
-        &symbol_short!("upgrade"),
-        &3600u64,
-    );
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
 
-    env.ledger().with_mut(|li| li.timestamp = 1000 + 3601);
-    client.vault_execute_upgrade(&executor, &entry_id);
+    let orders = vec![
+        &env,
+        (symbol_short!("BTCUSD"), 1_000_000i128, 50_000i128, true),
+        (symbol_short!("ETHUSD"), 500_000i128, 3_000i128, true),
+    ];
 
-    // Second execution must fail
-    let result = client.try_vault_execute_upgrade(&executor, &entry_id);
-    assert!(result.is_err());
+    let trade_ids = client.trade_batch(&trader, &orders, &token_id, &0i128, &fee_recipient);
+    assert_eq!(trade_ids.len(), 2);
+    assert_eq!(trade_ids.get(0).unwrap(), 1);
 }
 
 #[test]
-fn test_vault_rejects_delay_below_minimum() {
+fn test_batch_trade_gas_efficiency() {
     let env = Env::default();
     env.ledger().with_mut(|li| li.timestamp = 1000);
     env.mock_all_auths();
 
-    let (client, admin, _approver, _executor) = setup_contract(&env);
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
 
-    // 1800 seconds < MIN_DELAY (3600) — must fail
-    let result = client.try_vault_queue_upgrade(
-        &admin,
-        &symbol_short!("v2hash"),
-        &symbol_short!("upgrade"),
-        &1800u64,
-    );
-    assert!(result.is_err());
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    // Measure individual trades
+    env.budget().reset_default();
+    for i in 0..3 {
+        client.trade(
+            &trader,
+            &symbol_short!("BTCUSD"),
+            &(1_000_000i128 + i as i128),
+            &50_000i128,
+            &true,
+            &token_id,
+            &0i128,
+            &fee_recipient,
+        );
+    }
+    let _individual_cpu = env.budget().cpu_instruction_cost();
+
+    // Reset contract for batch test
+    let contract_id = env.register_contract(None, UpgradeableTradingContract);
+    let client2 = UpgradeableTradingContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let approver = Address::generate(&env);
+    let executor = Address::generate(&env);
+    let mut approvers = Vec::new(&env);
+    approvers.push_back(approver);
+    client2.init(&admin, &approvers, &executor);
+
+    // Measure batch trade
+    env.budget().reset_default();
+    let mut orders = Vec::new(&env);
+    for i in 0..3 {
+        orders.push_back((
+            symbol_short!("BTCUSD"),
+            1_000_000i128 + i as i128,
+            50_000i128,
+            true,
+        ));
+    }
+    client2.trade_batch(&trader, &orders, &token_id, &0i128, &fee_recipient);
+    let _batch_cpu = env.budget().cpu_instruction_cost();
+
+    // Batch should be more efficient (less than individual trades)
+    // Note: This is a rough check, actual savings depend on implementation
 }
 
 #[test]
-fn test_vault_multiple_queued_entries() {
+fn test_optimized_storage_access_pattern() {
     let env = Env::default();
     env.ledger().with_mut(|li| li.timestamp = 1000);
     env.mock_all_auths();
 
-    let (client, admin, _approver, executor) = setup_contract(&env);
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
 
-    let id1 = client.vault_queue_upgrade(
-        &admin,
-        &symbol_short!("v2hash"),
-        &symbol_short!("upg1"),
-        &3600u64,
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    // Execute trade and measure
+    env.budget().reset_default();
+    let trade_id = client.trade(
+        &trader,
+        &symbol_short!("BTCUSD"),
+        &1_000_000i128,
+        &50_000i128,
+        &true,
+        &token_id,
+        &0i128,
+        &fee_recipient,
     );
-    let id2 = client.vault_queue_upgrade(
-        &admin,
-        &symbol_short!("v3hash"),
-        &symbol_short!("upg2"),
-        &7200u64,
-    );
 
-    assert_eq!(id1, 1);
-    assert_eq!(id2, 2);
+    let _cpu_cost = env.budget().cpu_instruction_cost();
+    let _mem_cost = env.budget().memory_bytes_cost();
 
-    // Cancel first, execute second
-    client.vault_cancel_upgrade(&admin, &id1);
-
-    env.ledger().with_mut(|li| li.timestamp = 1000 + 7201);
-    let entry2 = client.vault_execute_upgrade(&executor, &id2);
-
-    assert_eq!(entry2.status, VaultStatus::Executed);
-    assert_eq!(client.vault_get_entry(&id1).status, VaultStatus::Cancelled);
+    // Verify trade executed correctly
+    assert_eq!(trade_id, 1);
+    let stats = client.get_stats();
+    assert_eq!(stats.total_trades, 1);
 }

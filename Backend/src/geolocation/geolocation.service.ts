@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import { CircuitBreakerService } from '../circuit-breaker/circuit-breaker.service';
 import { PrismaService } from '../prisma.service';
 
 @Injectable()
@@ -12,11 +13,19 @@ export class GeolocationService {
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
+    private readonly circuitBreakerService: CircuitBreakerService,
   ) {
     this.ipInfoToken = this.configService.get<string>('IPINFO_TOKEN');
     this.sanctionedCountries = this.configService.get<string[]>('SANCTIONED_COUNTRIES', [
       'CU', 'IR', 'KP', 'SY', 'RU', 'BY'
     ]);
+    this.circuitBreakerService.register('ip-geolocation-provider', {
+      failureThreshold: 5,
+      failureWindowMs: 10_000,
+      openTimeoutMs: 30_000,
+      halfOpenMaxCalls: 10,
+      halfOpenSuccessThreshold: 3,
+    });
   }
 
   async getLocation(ip: string) {
@@ -35,7 +44,9 @@ export class GeolocationService {
     }
 
     try {
-      const response = await axios.get(`https://ipinfo.io/${ip}?token=${this.ipInfoToken}`);
+      const response = await this.circuitBreakerService.execute('ip-geolocation-provider', () =>
+        axios.get(`https://ipinfo.io/${ip}?token=${this.ipInfoToken}`),
+      );
       const [lat, lng] = (response.data.loc || '0,0').split(',').map(Number);
       
       return {

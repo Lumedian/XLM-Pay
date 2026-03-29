@@ -100,4 +100,8 @@ export class ConnectionStateService {
       totalConnections: this.socketUser.size,
     };
   }
+
+  getConnectedUsers(): string[] {
+    return Array.from(this.userSockets.keys());
+  }
 }

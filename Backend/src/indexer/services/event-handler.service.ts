@@ -71,6 +71,27 @@ class MilestoneRejectedHandler implements IEventHandler {
       this.logger.log(`Updated trust score for creator ${project.creatorId}`);
     }
   }
+
+  async undo(event: ParsedContractEvent): Promise<void> {
+    const data = event.data as any;
+    this.logger.log(`Rolling back MILESTONE_REJECTED for project ${data.projectId}`);
+
+    const project = await this.prisma.project.findUnique({
+      where: { contractId: data.projectId.toString() },
+    });
+
+    if (project) {
+      // Revert milestone status to APPROVED
+      await this.prisma.milestone.updateMany({
+        where: { projectId: project.id },
+        data: { status: 'APPROVED' },
+      });
+
+      if (project.creatorId) {
+        await this.reputationService.updateTrustScore(project.creatorId);
+      }
+    }
+  }
 }
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
@@ -143,6 +164,16 @@ class ProjectCreatedHandler implements IEventHandler {
     });
 
     this.logger.log(`Created/updated project ${data.projectId}`);
+  }
+
+  async undo(event: ParsedContractEvent): Promise<void> {
+    const data = event.data as unknown as ProjectCreatedEvent;
+    this.logger.log(`Rolling back PROJECT_CREATED for project ${data.projectId}`);
+
+    // Delete the project
+    await this.prisma.project.delete({
+      where: { contractId: data.projectId.toString() },
+    });
   }
 }
 
@@ -227,6 +258,32 @@ class ContributionMadeHandler implements IEventHandler {
     }
 
     this.logger.log(`Recorded contribution of ${data.amount} for project ${data.projectId}`);
+  }
+
+  async undo(event: ParsedContractEvent): Promise<void> {
+    const data = event.data as unknown as ContributionMadeEvent;
+    this.logger.log(`Rolling back CONTRIBUTION_MADE for project ${data.projectId}`);
+
+    // Delete the contribution
+    await this.prisma.contribution.delete({
+      where: { transactionHash: event.transactionHash },
+    });
+
+    // Revert project current funds
+    const project = await this.prisma.project.findUnique({
+      where: { contractId: data.projectId.toString() },
+    });
+
+    if (project) {
+      await this.prisma.project.update({
+        where: { id: project.id },
+        data: {
+          currentFunds: {
+            decrement: BigInt(data.amount),
+          },
+        },
+      });
+    }
   }
 }
 
@@ -354,6 +411,26 @@ class FundsReleasedHandler implements IEventHandler {
 
     this.logger.log(`Released funds for project ${data.projectId}`);
   }
+
+  async undo(event: ParsedContractEvent): Promise<void> {
+    const data = event.data as unknown as FundsReleasedEvent;
+    this.logger.log(`Rolling back FUNDS_RELEASED for project ${data.projectId}`);
+
+    const project = await this.prisma.project.findUnique({
+      where: { contractId: data.projectId.toString() },
+    });
+
+    if (project) {
+      // Revert milestone to APPROVED status
+      await this.prisma.milestone.updateMany({
+        where: { projectId: project.id },
+        data: {
+          status: 'APPROVED',
+          completionDate: null,
+        },
+      });
+    }
+  }
 }
 
 /**
@@ -382,6 +459,16 @@ class ProjectCompletedHandler implements IEventHandler {
 
     this.logger.log(`Marked project ${data.projectId} as completed`);
   }
+
+  async undo(event: ParsedContractEvent): Promise<void> {
+    const data = event.data as unknown as ProjectStatusEvent;
+    this.logger.log(`Rolling back PROJECT_COMPLETED for project ${data.projectId}`);
+
+    await this.prisma.project.updateMany({
+      where: { contractId: data.projectId.toString() },
+      data: { status: 'ACTIVE' },
+    });
+  }
 }
 
 /**
@@ -409,6 +496,16 @@ class ProjectFailedHandler implements IEventHandler {
     });
 
     this.logger.log(`Marked project ${data.projectId} as failed/cancelled`);
+  }
+
+  async undo(event: ParsedContractEvent): Promise<void> {
+    const data = event.data as unknown as ProjectStatusEvent;
+    this.logger.log(`Rolling back PROJECT_FAILED for project ${data.projectId}`);
+
+    await this.prisma.project.updateMany({
+      where: { contractId: data.projectId.toString() },
+      data: { status: 'ACTIVE' },
+    });
   }
 }
 

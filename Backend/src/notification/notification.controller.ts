@@ -1,19 +1,25 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
-import { Prisma } from '@prisma/client';
+import { Prisma, NotificationChannel, NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
+import { NotificationService } from './services/notification.service';
 import {
   NotificationSettingsDto,
   UpdateNotificationSettingsDto,
   PushSubscriptionDto,
   SubscribeResponseDto,
+  UnsubscribeDto,
+  TrackEventDto,
 } from './dto/notification.dto';
 
 @ApiTags('notifications')
 @ApiBearerAuth('JWT-auth')
 @Controller('notifications')
 export class NotificationController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   @Get('settings/:userId')
   @ApiOperation({
@@ -91,5 +97,84 @@ export class NotificationController {
       data: { pushSubscription: subscription.subscription as Prisma.InputJsonValue },
     });
     return { success: true };
+  }
+
+  @Post('unsubscribe/:userId')
+  @ApiOperation({
+    summary: 'Unsubscribe from notifications',
+    description: 'Updates unsubscribe preferences for email, SMS, push, and channels',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'User unique identifier',
+    example: 'cm3x1234567890',
+  })
+  async unsubscribe(
+    @Param('userId') userId: string,
+    @Body() payload: UnsubscribeDto,
+  ): Promise<SubscribeResponseDto> {
+    await this.notificationService.unsubscribe(userId, payload.channel, payload.type);
+    return { success: true };
+  }
+
+  @Get('unsubscribe/:identifier')
+  @ApiOperation({
+    summary: 'Unsubscribe from notifications via email link',
+    description: 'Processes unsubscribe requests using an email address or user identifier',
+  })
+  async unsubscribeViaLink(
+    @Param('identifier') identifier: string,
+    @Query('channel') channel?: NotificationChannel,
+    @Query('type') type?: NotificationType,
+  ): Promise<SubscribeResponseDto> {
+    await this.notificationService.unsubscribe(identifier, channel, type);
+    return { success: true };
+  }
+
+  @Get('predict/send-time/:userId/:type')
+  @ApiOperation({
+    summary: 'Predict user optimal send time',
+    description: 'Returns the best time to send the next notification based on engagement history',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'User unique identifier',
+    example: 'cm3x1234567890',
+  })
+  @ApiParam({
+    name: 'type',
+    description: 'Notification type',
+    example: 'CONTRIBUTION',
+  })
+  async predictSendTime(
+    @Param('userId') userId: string,
+    @Param('type') type: NotificationType,
+  ): Promise<{ sendAt: string }> {
+    const sendAt = await this.notificationService.predictOptimalSendTime(userId, type);
+    return { sendAt: sendAt.toISOString() };
+  }
+
+  @Post('track/open/:deliveryId')
+  @ApiOperation({
+    summary: 'Track notification open',
+    description: 'Registers that a notification delivery was opened',
+  })
+  async trackOpen(
+    @Param('deliveryId') deliveryId: string,
+    @Body() payload: TrackEventDto,
+  ): Promise<{ success: boolean }> {
+    return this.notificationService.trackOpen(deliveryId);
+  }
+
+  @Post('track/click/:deliveryId')
+  @ApiOperation({
+    summary: 'Track notification click',
+    description: 'Registers that a notification click-through occurred',
+  })
+  async trackClick(
+    @Param('deliveryId') deliveryId: string,
+    @Body() payload: TrackEventDto,
+  ): Promise<{ success: boolean }> {
+    return this.notificationService.trackClick(deliveryId);
   }
 }

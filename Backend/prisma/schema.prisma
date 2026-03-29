@@ -50,8 +50,8 @@ model User {
   tenantMembers       TenantMember[]
   experimentAssignments ExperimentAssignment[]
   verificationSessions VerificationSession[]
-  userLocations       UserLocation[]
-  marginAccount        MarginAccount?
+  crossChainSwaps      CrossChainSwap[]
+
 
   @@unique([tenantId, email])
   @@unique([tenantId, walletAddress])
@@ -294,9 +294,18 @@ model ProcessedEvent {
   abiVersion      String?  @map("abi_version")
   processedAt     DateTime @default(now()) @map("processed_at")
 
-  @@index([network, ledgerSeq])
   @@index([contractId, eventType])
   @@map("processed_events")
+}
+
+model LedgerHeader {
+  sequence  Int      @id
+  hash      String   @unique
+  prevHash  String   @map("prev_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([sequence])
+  @@map("ledger_headers")
 }
 
 model ContractAbiRegistry {
@@ -366,6 +375,9 @@ model NotificationSetting {
   notifyContributions Boolean  @default(true) @map("notify_contributions")
   notifyMilestones    Boolean  @default(true) @map("notify_milestones")
   notifyDeadlines     Boolean  @default(true) @map("notify_deadlines")
+  channelPreferences  Json?    @map("channel_preferences")
+  dailyLimit          Int      @default(5) @map("daily_limit")
+  unsubscribeToken    String?  @map("unsubscribe_token")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
@@ -373,19 +385,121 @@ model NotificationSetting {
 }
 
 model Notification {
-  id         String                 @id @default(cuid())
-  userId     String                 @map("user_id")
-  user       User                   @relation(fields: [userId], references: [id])
-  type       NotificationType
-  title      String
-  message    String
-  read       Boolean                @default(false)
-  data       Json? // Optional metadata (e.g., projectId)
-  createdAt  DateTime               @default(now()) @map("created_at")
-  deliveries NotificationDelivery[]
+  id          String                 @id @default(cuid())
+  userId      String                 @map("user_id")
+  user        User                   @relation(fields: [userId], references: [id])
+  type        NotificationType
+  title       String
+  message     String
+  read        Boolean                @default(false)
+  data        Json? // Optional metadata (e.g., projectId)
+  status      NotificationStatus     @default(SENT)
+  scheduledAt DateTime?              @map("scheduled_at")
+  variant     String?
+  critical    Boolean                @default(false)
+  openCount   Int                    @default(0) @map("open_count")
+  clickCount  Int                    @default(0) @map("click_count")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  deliveries  NotificationDelivery[]
 
   @@index([userId])
   @@map("notifications")
+}
+
+// Clearing house models for CCP functionality
+model ClearingMarginAccount {
+  id        String   @id @default(cuid())
+  memberId  String   @unique @map("member_id")
+  // relation to application user
+  member    User     @relation(fields: [memberId], references: [id])
+  initial   Decimal  @default(0) @db.Decimal(18, 4)
+  variation Decimal  @default(0) @db.Decimal(18, 4)
+  balance   Decimal  @default(0) @db.Decimal(18, 4)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("clearing_margin_accounts")
+}
+
+model ClearingPosition {
+  id           String   @id @default(cuid())
+  tradeId      String   @map("trade_id")
+  memberId     String   @map("member_id")
+  instrument   String
+  quantity     Decimal  @db.Decimal(18, 4)
+  avgPrice     Decimal  @db.Decimal(18, 4)
+  unrealizedPnl Decimal @default(0) @db.Decimal(18, 4) @map("unrealized_pnl")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([tradeId])
+  @@index([memberId])
+  @@map("clearing_positions")
+}
+
+model DefaultFundContribution {
+  id        String   @id @default(cuid())
+  memberId  String   @map("member_id")
+  member    User     @relation(fields: [memberId], references: [id])
+  amount    Decimal  @db.Decimal(18, 4)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("default_fund_contributions")
+}
+
+model ClearingSettlement {
+  id             String   @id @default(cuid())
+  instrument     String
+  totalVariation Decimal  @db.Decimal(18, 4) @map("total_variation")
+  details        Json?
+  settledAt      DateTime @map("settled_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("clearing_settlements")
+}
+
+model ClearingAuction {
+  id          String   @id @default(cuid())
+  defaulterId String   @map("defaulter_id")
+  status      String   @default("OPEN")
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("clearing_auctions")
+}
+
+// Document processing models
+model Document {
+  id         String   @id @default(cuid())
+  filename   String
+  filepath   String
+  status     String   @default("queued")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  extractions DocumentExtraction[]
+  audits     AuditLog[]
+  @@map("documents")
+}
+
+model DocumentExtraction {
+  id         String   @id @default(cuid())
+  documentId String   @map("document_id")
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  field      String
+  value      String
+  confidence Decimal  @db.Decimal(5,4)
+  createdAt  DateTime @default(now()) @map("created_at")
+  @@map("document_extractions")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  documentId String?  @map("document_id")
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  action     String
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  @@map("audit_logs")
 }
 
 model NotificationDelivery {
@@ -395,6 +509,8 @@ model NotificationDelivery {
   channel        NotificationChannel
   status         DeliveryStatus      @default(PENDING)
   errorMessage   String?             @map("error_message")
+  openedAt       DateTime?           @map("opened_at")
+  clickedAt      DateTime?           @map("clicked_at")
   attempts       Int                 @default(0)
   lastAttemptAt  DateTime?           @map("last_attempt_at")
   createdAt      DateTime            @default(now()) @map("created_at")
@@ -408,6 +524,12 @@ enum NotificationChannel {
   SMS
   PUSH
   WEBSOCKET
+}
+
+enum NotificationStatus {
+  SCHEDULED
+  SENT
+  SKIPPED
 }
 
 enum DeliveryStatus {
@@ -1023,6 +1145,46 @@ model AuditRetentionPolicy {
   @@map("audit_retention_policies")
 }
 
+model SentimentRecord {
+  id          String          @id @default(cuid())
+  source      String
+  asset       String
+  text        String?
+  sentiment   Decimal         @db.Decimal(5, 4)
+  label       SentimentLabel
+  collectedAt DateTime        @default(now()) @map("collected_at")
+  metadata    Json?
+
+  @@index([asset])
+  @@index([collectedAt])
+  @@map("sentiment_records")
+}
+
+model SentimentSignal {
+  id          String          @id @default(cuid())
+  asset       String
+  signal      SignalType
+  score       Decimal         @db.Decimal(5, 4)
+  reason      String?
+  generatedAt DateTime        @default(now()) @map("generated_at")
+
+  @@index([asset])
+  @@index([generatedAt])
+  @@map("sentiment_signals")
+}
+
+enum SentimentLabel {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+}
+
+enum SignalType {
+  BUY
+  SELL
+  HOLD
+}
+
 // ─── Payment System Models ───────────────────────────────────────────────────
 
 enum SubscriptionStatus {
@@ -1093,10 +1255,13 @@ model Subscription {
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
 
-  invoices        Invoice[]
-  usageRecords    UsageRecord[]
-  paymentEvents   PaymentEvent[]
-  dunningAttempts DunningAttempt[]
+  invoices            Invoice[]
+  usageRecords        UsageRecord[]
+  paymentEvents       PaymentEvent[]
+  dunningAttempts     DunningAttempt[]
+  revenueRecognitions RevenueRecognition[]
+  prorationAdjustments ProrationAdjustment[]
+  billingCycleAnchor  DateTime?          @map("billing_cycle_anchor")
 
   @@index([tenantId])
   @@index([status])
@@ -1140,11 +1305,184 @@ model Invoice {
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
+  revenueRecognitions RevenueRecognition[]
+
   @@index([subscriptionId])
   @@index([tenantId])
   @@index([status])
   @@index([createdAt])
   @@map("invoices")
+}
+
+model SupplyChainFinanceInvoice {
+  id                     String                            @id @default(cuid())
+  tenantId               String?                           @map("tenant_id")
+  sellerUserId           String                            @map("seller_user_id")
+  buyerUserId            String?                           @map("buyer_user_id")
+  invoiceNumber          String                            @map("invoice_number")
+  debtorName             String                            @map("debtor_name")
+  debtorEmail            String?                           @map("debtor_email")
+  amount                 Decimal                           @db.Decimal(18, 2)
+  currency               String                            @default("USD")
+  issueDate              DateTime                          @map("issue_date")
+  dueDate                DateTime                          @map("due_date")
+  uploadedDocumentUrl    String                            @map("uploaded_document_url")
+  documentHash           String?                           @map("document_hash")
+  description            String?
+  metadata               Json?
+  status                 SupplyChainFinanceInvoiceStatus   @default(DRAFT)
+  verificationStatus     SupplyChainVerificationStatus     @default(PENDING) @map("verification_status")
+  buyerApprovalStatus    SupplyChainApprovalStatus         @default(PENDING) @map("buyer_approval_status")
+  complianceStatus       SupplyChainComplianceStatus       @default(PENDING) @map("compliance_status")
+  accountingProvider     SupplyChainAccountingProvider?    @map("accounting_provider")
+  accountingReference    String?                           @map("accounting_reference")
+  externalInvoiceId      String?                           @map("external_invoice_id")
+  nftTokenId             String?                           @unique @map("nft_token_id")
+  nftMetadataUri         String?                           @map("nft_metadata_uri")
+  smartContractAddress   String?                           @map("smart_contract_address")
+  riskScore              Int                               @default(50) @map("risk_score")
+  riskGrade              SupplyChainRiskGrade              @default(C) @map("risk_grade")
+  advanceRateBps         Int                               @default(8000) @map("advance_rate_bps")
+  reserveAmount          Decimal                           @default(0) @db.Decimal(18, 2) @map("reserve_amount")
+  financedAmount         Decimal                           @default(0) @db.Decimal(18, 2) @map("financed_amount")
+  expectedYieldBps       Int                               @default(0) @map("expected_yield_bps")
+  regulatoryFlags        Json?                             @map("regulatory_flags")
+  verifiedAt             DateTime?                         @map("verified_at")
+  approvedAt             DateTime?                         @map("approved_at")
+  tokenizedAt            DateTime?                         @map("tokenized_at")
+  fundedAt               DateTime?                         @map("funded_at")
+  settledAt              DateTime?                         @map("settled_at")
+  defaultedAt            DateTime?                         @map("defaulted_at")
+  createdAt              DateTime                          @default(now()) @map("created_at")
+  updatedAt              DateTime                          @updatedAt @map("updated_at")
+
+  verifications          SupplyChainInvoiceVerification[]
+  auctions               SupplyChainDiscountAuction[]
+  waterfalls             SupplyChainPaymentWaterfall[]
+  collections            SupplyChainCollectionCase[]
+
+  @@unique([sellerUserId, invoiceNumber])
+  @@index([tenantId, createdAt])
+  @@index([sellerUserId, status])
+  @@index([buyerUserId, buyerApprovalStatus])
+  @@index([verificationStatus, complianceStatus])
+  @@map("scf_invoices")
+}
+
+model SupplyChainInvoiceVerification {
+  id                 String                         @id @default(cuid())
+  invoiceId          String                         @map("invoice_id")
+  invoice            SupplyChainFinanceInvoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  verificationType   SupplyChainVerificationType    @default(DOCUMENT_REVIEW) @map("verification_type")
+  status             SupplyChainVerificationStatus  @default(PENDING)
+  reviewerUserId     String?                        @map("reviewer_user_id")
+  notes              String?
+  verificationData   Json?                          @map("verification_data")
+  createdAt          DateTime                       @default(now()) @map("created_at")
+  updatedAt          DateTime                       @updatedAt @map("updated_at")
+
+  @@index([invoiceId, status])
+  @@map("scf_invoice_verifications")
+}
+
+model SupplyChainDiscountAuction {
+  id                   String                           @id @default(cuid())
+  invoiceId            String                           @map("invoice_id")
+  invoice              SupplyChainFinanceInvoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  reserveDiscountBps   Int                              @default(1200) @map("reserve_discount_bps")
+  minimumBidAmount     Decimal                          @db.Decimal(18, 2) @map("minimum_bid_amount")
+  fundingTargetAmount  Decimal                          @db.Decimal(18, 2) @map("funding_target_amount")
+  startsAt             DateTime                         @map("starts_at")
+  endsAt               DateTime                         @map("ends_at")
+  status               SupplyChainAuctionStatus         @default(DRAFT)
+  winningBidId         String?                          @unique @map("winning_bid_id")
+  createdAt            DateTime                         @default(now()) @map("created_at")
+  updatedAt            DateTime                         @updatedAt @map("updated_at")
+
+  bids                 SupplyChainAuctionBid[]           @relation("AuctionBids")
+  winningBid           SupplyChainAuctionBid?           @relation("WinningAuctionBid", fields: [winningBidId], references: [id], onDelete: SetNull)
+  waterfall            SupplyChainPaymentWaterfall?
+
+  @@index([invoiceId, status])
+  @@index([status, endsAt])
+  @@map("scf_discount_auctions")
+}
+
+model SupplyChainAuctionBid {
+  id                  String                         @id @default(cuid())
+  auctionId           String                         @map("auction_id")
+  auction             SupplyChainDiscountAuction     @relation("AuctionBids", fields: [auctionId], references: [id], onDelete: Cascade)
+  investorUserId      String                         @map("investor_user_id")
+  investorWallet      String?                        @map("investor_wallet")
+  discountRateBps     Int                            @map("discount_rate_bps")
+  bidAmount           Decimal                        @db.Decimal(18, 2) @map("bid_amount")
+  expectedYieldBps    Int                            @map("expected_yield_bps")
+  status              SupplyChainBidStatus           @default(ACTIVE)
+  metadata            Json?
+  createdAt           DateTime                       @default(now()) @map("created_at")
+  updatedAt           DateTime                       @updatedAt @map("updated_at")
+
+  winningAuction      SupplyChainDiscountAuction?    @relation("WinningAuctionBid")
+
+  @@index([auctionId, status])
+  @@index([investorUserId, createdAt])
+  @@map("scf_auction_bids")
+}
+
+model SupplyChainPaymentWaterfall {
+  id                        String                              @id @default(cuid())
+  invoiceId                 String                              @map("invoice_id")
+  invoice                   SupplyChainFinanceInvoice           @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  auctionId                 String?                             @unique @map("auction_id")
+  auction                   SupplyChainDiscountAuction?         @relation(fields: [auctionId], references: [id], onDelete: SetNull)
+  grossPaymentAmount        Decimal                             @db.Decimal(18, 2) @map("gross_payment_amount")
+  servicingFeeAmount        Decimal                             @default(0) @db.Decimal(18, 2) @map("servicing_fee_amount")
+  platformFeeAmount         Decimal                             @default(0) @db.Decimal(18, 2) @map("platform_fee_amount")
+  investorPayoutAmount      Decimal                             @default(0) @db.Decimal(18, 2) @map("investor_payout_amount")
+  sellerResidualAmount      Decimal                             @default(0) @db.Decimal(18, 2) @map("seller_residual_amount")
+  status                    SupplyChainWaterfallStatus          @default(PENDING)
+  distributionTransactionId String?                             @map("distribution_transaction_id")
+  distributionPayload       Json?                               @map("distribution_payload")
+  createdAt                 DateTime                            @default(now()) @map("created_at")
+  updatedAt                 DateTime                            @updatedAt @map("updated_at")
+
+  @@index([invoiceId, status])
+  @@map("scf_payment_waterfalls")
+}
+
+model SupplyChainCollectionCase {
+  id                    String                             @id @default(cuid())
+  invoiceId             String                             @map("invoice_id")
+  invoice               SupplyChainFinanceInvoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  status                SupplyChainCollectionStatus        @default(OPEN)
+  assignedAgency        String?                            @map("assigned_agency")
+  outstandingAmount     Decimal                            @db.Decimal(18, 2) @map("outstanding_amount")
+  recoveredAmount       Decimal                            @default(0) @db.Decimal(18, 2) @map("recovered_amount")
+  notes                 String?
+  openedAt              DateTime                           @default(now()) @map("opened_at")
+  lastActionAt          DateTime                           @default(now()) @map("last_action_at")
+  resolvedAt            DateTime?                          @map("resolved_at")
+
+  @@index([invoiceId, status])
+  @@map("scf_collection_cases")
+}
+
+model SupplyChainAccountingConnection {
+  id                      String                          @id @default(cuid())
+  tenantId                String?                         @map("tenant_id")
+  sellerUserId            String                          @map("seller_user_id")
+  provider                SupplyChainAccountingProvider
+  externalOrganizationId  String                          @map("external_organization_id")
+  status                  SupplyChainIntegrationStatus    @default(CONNECTED)
+  credentials             Json?
+  metadata                Json?
+  lastSyncAt              DateTime?                       @map("last_sync_at")
+  createdAt               DateTime                        @default(now()) @map("created_at")
+  updatedAt               DateTime                        @updatedAt @map("updated_at")
+
+  @@unique([sellerUserId, provider])
+  @@index([tenantId, provider])
+  @@map("scf_accounting_connections")
 }
 
 model PaymentMethod {
@@ -1206,6 +1544,96 @@ enum WebhookSubscriptionStatus {
   ACTIVE
   PAUSED
   DISABLED
+}
+
+enum SupplyChainFinanceInvoiceStatus {
+  DRAFT
+  PENDING_VERIFICATION
+  VERIFIED
+  TOKENIZED
+  AUCTION_LIVE
+  FUNDED
+  SETTLED
+  DEFAULTED
+  COLLECTIONS
+  REJECTED
+}
+
+enum SupplyChainVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  MANUAL_REVIEW
+}
+
+enum SupplyChainVerificationType {
+  DOCUMENT_REVIEW
+  ACCOUNTING_MATCH
+  BUYER_CONFIRMATION
+  AML_SCREENING
+}
+
+enum SupplyChainApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SupplyChainComplianceStatus {
+  PENDING
+  PASSED
+  FAILED
+  NEEDS_REVIEW
+}
+
+enum SupplyChainAccountingProvider {
+  QUICKBOOKS
+  XERO
+}
+
+enum SupplyChainRiskGrade {
+  A
+  B
+  C
+  D
+  E
+}
+
+enum SupplyChainAuctionStatus {
+  DRAFT
+  LIVE
+  CLOSED
+  AWARDED
+  CANCELLED
+}
+
+enum SupplyChainBidStatus {
+  ACTIVE
+  WINNING
+  OUTBID
+  REJECTED
+  WITHDRAWN
+}
+
+enum SupplyChainWaterfallStatus {
+  PENDING
+  DISTRIBUTED
+  SETTLED
+  DEFAULTED
+}
+
+enum SupplyChainCollectionStatus {
+  OPEN
+  NEGOTIATING
+  ESCALATED
+  RECOVERED
+  WRITTEN_OFF
+}
+
+enum SupplyChainIntegrationStatus {
+  CONNECTED
+  DEGRADED
+  DISCONNECTED
 }
 
 enum WebhookDeliveryStatus {
@@ -1371,4 +1799,117 @@ enum DocumentType {
   PASSPORT
   DRIVERS_LICENSE
   NATIONAL_ID
+
+// ─── Predictive Settlement Engine ───────────────────────────────────────────
+
+model NetworkCongestionSnapshot {
+  id                  String   @id @default(cuid())
+  network             String   @default("stellar")
+  ledgerSeq           Int?     @map("ledger_seq")
+  baseFeeStroops      Int      @map("base_fee_stroops")
+  priorityFeeStroops  Int      @default(0) @map("priority_fee_stroops")
+  txVolumePerLedger   Int      @map("tx_volume_per_ledger")
+  ledgerCloseTimeMs   Int      @map("ledger_close_time_ms")
+  congestionScore     Float    @map("congestion_score")        // 0.0–1.0
+  predictedScoreP5m   Float?   @map("predicted_score_p5m")    // 5-min forecast
+  predictedScoreP10m  Float?   @map("predicted_score_p10m")   // 10-min forecast
+  predictedScoreP15m  Float?   @map("predicted_score_p15m")   // 15-min forecast
+  predictedFeeP5m     Int?     @map("predicted_fee_p5m")      // stroops
+  predictedFeeP10m    Int?     @map("predicted_fee_p10m")
+  predictedFeeP15m    Int?     @map("predicted_fee_p15m")
+  p95FeeThreshold     Int?     @map("p95_fee_threshold")
+  recordedAt          DateTime @default(now()) @map("recorded_at")
+
+  @@index([network, recordedAt])
+  @@index([recordedAt])
+  @@map("network_congestion_snapshots")
 }
+
+model SettlementJob {
+  id                 String              @id @default(cuid())
+  idempotencyKey     String              @unique @map("idempotency_key")
+  settlementType     String              @map("settlement_type")   // e.g. "clearing", "claim", "swap"
+  signerAddress      String              @map("signer_address")
+  contractAddress    String?             @map("contract_address")
+  payload            Json
+  urgency            SettlementUrgency   @default(NORMAL)
+  status             SettlementJobStatus @default(QUEUED)
+  priority           Int                 @default(50)              // 0–100 computed score
+  deadlineAt         DateTime?           @map("deadline_at")       // SLA deadline
+  slaMinutes         Int                 @default(60) @map("sla_minutes")
+  scheduledAt        DateTime?           @map("scheduled_at")      // optimal submission time
+  submittedAt        DateTime?           @map("submitted_at")
+  confirmedAt        DateTime?           @map("confirmed_at")
+  txHash             String?             @map("tx_hash")
+  feePaidStroops     Int?                @map("fee_paid_stroops")
+  estimatedFeeSaved  Int?                @map("estimated_fee_saved")
+  l2Provider         String?             @map("l2_provider")       // null = L1
+  congestionAtSubmit Float?              @map("congestion_at_submit")
+  failureReason      String?             @map("failure_reason")
+  attempts           Int                 @default(0)
+  maxAttempts        Int                 @default(5) @map("max_attempts")
+  metadata           Json?
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  slaRecord          SettlementSlaRecord?
+
+  @@index([status, scheduledAt])
+  @@index([urgency, status])
+  @@index([signerAddress, status])
+  @@index([createdAt])
+  @@map("settlement_jobs")
+}
+
+model SettlementCostSaving {
+  id               String   @id @default(cuid())
+  settlementJobId  String?  @map("settlement_job_id")
+  network          String   @default("stellar")
+  feePaidStroops   Int      @map("fee_paid_stroops")
+  baselineFeeStroops Int    @map("baseline_fee_stroops")     // fee that would have been paid without optimization
+  savedStroops     Int      @map("saved_stroops")
+  savedUsd         Float?   @map("saved_usd")
+  strategy         String                                    // e.g. "deferred", "l2_offload", "batch"
+  recordedAt       DateTime @default(now()) @map("recorded_at")
+
+  @@index([recordedAt])
+  @@index([network, recordedAt])
+  @@map("settlement_cost_savings")
+}
+
+model SettlementSlaRecord {
+  id                 String   @id @default(cuid())
+  settlementJobId    String   @unique @map("settlement_job_id")
+  job                SettlementJob @relation(fields: [settlementJobId], references: [id], onDelete: Cascade)
+  slaMinutes         Int      @map("sla_minutes")
+  deadlineAt         DateTime @map("deadline_at")
+  confirmedAt        DateTime? @map("confirmed_at")
+  actualMinutes      Float?   @map("actual_minutes")
+  slaBreached        Boolean  @default(false) @map("sla_breached")
+  breachMarginMinutes Float?  @map("breach_margin_minutes")  // negative = breached by N minutes
+  urgency            SettlementUrgency
+  recordedAt         DateTime @default(now()) @map("recorded_at")
+
+  @@index([slaBreached, recordedAt])
+  @@index([urgency, slaBreached])
+  @@map("settlement_sla_records")
+}
+
+enum SettlementUrgency {
+  LOW
+  NORMAL
+  HIGH
+  URGENT   // >95th percentile priority
+}
+
+enum SettlementJobStatus {
+  QUEUED
+  SCHEDULED
+  PROCESSING
+  SUBMITTED
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+}
+

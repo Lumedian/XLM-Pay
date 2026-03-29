@@ -49,4 +49,28 @@ export class WebsocketService {
   getStats() {
     return this.connectionState.getStats();
   }
+
+  // --- CDP Specific Methods ---
+
+  async addToRoom(socketId: string, room: string): Promise<void> {
+    // This would typically be handled by the gateway, but we'll add a placeholder
+    // In a real implementation, this would interact with the WebSocket gateway
+    this.messagesGateway.sendToUser(socketId, 'room_joined', { room });
+  }
+
+  async removeFromRoom(socketId: string, room: string): Promise<void> {
+    // Placeholder implementation
+    this.messagesGateway.sendToUser(socketId, 'room_left', { room });
+  }
+
+  async sendToRoom(room: string, event: string, data: any): Promise<void> {
+    // Broadcast to all users in a room
+    // This is a simplified implementation - in production, you'd track room memberships
+    this.messagesGateway.broadcast(event, data);
+  }
+
+  async getRoomMembers(room: string): Promise<string[]> {
+    // Placeholder implementation - would need to track actual room memberships
+    return this.connectionState.getConnectedUsers();
+  }
 }
