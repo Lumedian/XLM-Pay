@@ -8,13 +8,14 @@ A robust and scalable TypeScript backend built with NestJS.
 - **TypeScript**: Type-safe development
 - **Docker Support**: Containerized PostgreSQL and Redis
 - **Environment Validation**: Runtime validation of environment variables
+- **Blue-Green Deployment Hooks**: Slot-aware health checks, traffic switching, and rollback support
 - **Code Quality**: ESLint + Prettier with pre-commit hooks
 - **Testing**: Jest configuration included
 
 ## Prerequisites
 
 - Node.js 20+
-- Docker & Docker Compose
+- Docker and Docker Compose
 - npm or yarn
 
 ## Getting Started
@@ -37,27 +38,25 @@ Edit `.env` with your configuration.
 
 ### 3. Start Development Server
 
-**Option A: Local Development (without Docker)**
+Option A: Local development
 
 ```bash
 npm run start:dev
 ```
 
-**Option B: Docker Development**
+Option B: Docker development
 
 ```bash
 docker-compose up
 ```
 
-The API will be available at `http://localhost:3000/api/v1`
+The API will be available at `http://localhost:3000/api/v1`.
 
 ### 4. Setup Git Hooks
 
 ```bash
 npm run prepare
 ```
-
-This installs Husky for pre-commit linting and formatting.
 
 ## Available Scripts
 
@@ -68,59 +67,36 @@ This installs Husky for pre-commit linting and formatting.
 - `npm run format` - Format code with Prettier
 - `npm run test` - Run tests
 - `npm run test:cov` - Run tests with coverage
+- `npm run deploy:blue-green` - Promote the inactive slot with health gates and traffic shifting
+- `npm run deploy:rollback` - Return traffic to the previous live slot
 
 ## Docker Commands
 
 ```bash
-# Start all services
 docker-compose up
-
-# Start in detached mode
 docker-compose up -d
-
-# Stop all services
 docker-compose down
-
-# View logs
 docker-compose logs -f app
-
-# Rebuild containers
 docker-compose up --build
-```
-
-## Project Structure
-
-```
-backend/
-├── src/
-│   ├── config/           # Configuration files
-│   │   └── env.validation.ts
-│   ├── app.controller.ts
-│   ├── app.module.ts
-│   ├── app.service.ts
-│   └── main.ts
-├── test/                 # E2E tests
-├── .env                  # Environment variables
-├── .env.example          # Example environment file
-├── docker-compose.yml    # Docker services
-├── Dockerfile            # Container definition
-├── nest-cli.json         # NestJS CLI config
-├── package.json
-└── tsconfig.json
 ```
 
 ## API Endpoints
 
 - `GET /api/v1` - Welcome message
-- `GET /api/v1/health` - Health check
+- `GET /health` - Combined liveness and readiness status
+- `GET /health/live` - Liveness probe
+- `GET /health/ready` - Readiness probe
+- `GET /health/deployment` - Deployment slot and release metadata
 
-## Next Steps
+## Blue-Green Deployment
 
-1. Add database integration (TypeORM or Prisma)
-2. Implement authentication module
-3. Create domain-specific modules
-4. Add API documentation (Swagger)
-5. Setup CI/CD pipeline
+The backend exposes slot-aware health data and includes deployment scripts for:
+
+- validating the inactive slot before promotion
+- switching traffic gradually through a load balancer hook
+- rolling back automatically on failed health or smoke checks
+
+Operational steps are documented in [blue-green-deployment-runbook.md](/C:/Users/hp/Desktop/wave/Stellara_Contracts/Backend/docs/blue-green-deployment-runbook.md). The CI workflow entry point lives at [backend-blue-green.yml](/C:/Users/hp/Desktop/wave/Stellara_Contracts/.github/workflows/backend-blue-green.yml).
 
 ## License
 

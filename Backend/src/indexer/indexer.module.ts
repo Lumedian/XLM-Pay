@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AbiRegistryModule } from '../abi-registry/abi-registry.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule } from '@nestjs/config';
 import { IndexerService } from './indexer.service';
@@ -29,6 +30,7 @@ import { TenancyModule } from '../tenancy/tenancy.module';
     NotificationModule,
     ReputationModule,
     TenancyModule,
+    AbiRegistryModule,
     // Configuration
     ConfigModule.forFeature(stellarConfig),
     ConfigModule.forFeature(indexerConfig),

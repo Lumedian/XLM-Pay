@@ -1,41 +1,80 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '../prisma.service';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
-import { TenantManagementService } from '../tenancy/tenant-management.service';
-import { Role } from '@prisma/client';
+import { Request } from 'express';
+import { createHash } from 'node:crypto';
+import { SessionService } from '../sessions/session.service';
+import { RedisService } from '../redis/redis.service';
+import { GeolocationService } from '../geolocation/geolocation.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
-    private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
-    private tenantManagementService: TenantManagementService,
+    private readonly sessionService: SessionService,
+    private readonly redisService: RedisService,
+    private readonly geoService: GeolocationService,
   ) {}
 
-  async login(walletAddress: string) {
-    const tenant = await this.tenantManagementService.getCurrentTenant();
-    let user = await this.prisma.user.findFirst({
-      where: {
-        tenantId: tenant.id,
-        walletAddress,
-      },
-    });
+  async login(walletAddress: string, request: Request) {
+    const ip = request.ip || request.socket.remoteAddress || '127.0.0.1';
+    const userAgent = request.headers['user-agent'];
+    const userId = this.deriveUserId(walletAddress);
 
-    if (!user) {
-      user = await this.prisma.user.create({
-        data: {
-          tenantId: tenant.id,
-          walletAddress,
-          roles: [Role.USER],
-        },
-      });
+    // Track location and perform security checks
+    const location = await this.geoService.trackUserLocation(userId, ip, userAgent);
+    
+    if (location) {
+      if (this.geoService.isSanctioned(location.country)) {
+        this.logger.warn(`Blocked login attempt from sanctioned country ${location.country} for user ${userId}`);
+        throw new ForbiddenException('Access from your location is restricted');
+      }
+
+      if (location.isVpn || location.isTor || location.isProxy) {
+        this.logger.warn(`High-risk connection detected (VPN/Tor/Proxy) for user ${userId} from IP ${ip}`);
+        // Optional: Trigger step-up auth or just log
+      }
+
+      const isImpossibleTravel = await this.geoService.checkImpossibleTravel(
+        userId, 
+        location.latitude, 
+        location.longitude
+      );
+      
+      if (isImpossibleTravel) {
+        this.logger.error(`Impossible travel detected for user ${userId}. Current location: ${location.city}, ${location.country}`);
+        // In a real app, we might send an alert or lock the account
+      }
     }
 
-    const tokens = await this.getTokens(user.id, walletAddress, user.roles);
-    await this.updateRefreshToken(user.id, tokens.refreshToken, tenant.id);
+    const subscriptionTier = this.resolveSubscriptionTier(request);
+    const user = {
+      id: userId,
+      walletAddress,
+      roles: this.resolveRoles(subscriptionTier),
+    };
+    const sessionId = this.sessionService.createSessionId();
+    const tokens = await this.getTokens(
+      user.id,
+      walletAddress,
+      user.roles,
+      sessionId,
+      subscriptionTier,
+    );
+    await this.sessionService.createSession(
+      {
+        id: user.id,
+        walletAddress: user.walletAddress,
+        roles: user.roles,
+        subscriptionTier,
+      },
+      sessionId,
+      tokens.refreshToken,
+      request,
+    );
 
     return {
       ...tokens,
@@ -43,67 +82,65 @@ export class AuthService {
         id: user.id,
         walletAddress: user.walletAddress,
         roles: user.roles,
+        subscriptionTier,
       },
     };
   }
 
-  async logout(userId: string, accessToken?: string) {
-    const tenant = await this.tenantManagementService.getCurrentTenant();
+  async logout(userId: string, accessToken?: string, sessionId?: string) {
+    let resolvedSessionId = sessionId;
+
     if (accessToken) {
+      // Decode to get expiration and blacklist it
       try {
         const decoded: any = this.jwtService.decode(accessToken);
         if (decoded && decoded.exp) {
           const expiresAt = new Date(decoded.exp * 1000);
-          await this.prisma.tokenBlacklist.create({
-            data: {
-              token: accessToken,
-              expiresAt,
-            },
-          });
+          await this.blacklistAccessToken(accessToken, expiresAt);
         }
-      } catch {
+        if (!resolvedSessionId && decoded?.sid) {
+          resolvedSessionId = decoded.sid;
+        }
+      } catch (e) {
+        // Ignored
       }
     }
 
-    await this.prisma.user.updateMany({
-      where: {
-        id: userId,
-        tenantId: tenant.id,
-        hashedRefreshToken: {
-          not: null,
-        },
-      },
-      data: {
-        hashedRefreshToken: null,
-      },
-    });
+    if (resolvedSessionId) {
+      await this.sessionService.terminateSession(userId, resolvedSessionId, 'logout');
+    }
   }
 
-  async refreshTokens(refreshToken: string) {
-    const tenant = await this.tenantManagementService.getCurrentTenant();
+  async refreshTokens(refreshToken: string, request: Request) {
     try {
       const decoded = this.jwtService.verify(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET', 'super_refresh_secret_key_for_development'),
+        secret: this.configService.get<string>(
+          'JWT_REFRESH_SECRET',
+          'super_refresh_secret_key_for_development',
+        ),
       });
 
-      const user = await this.prisma.user.findFirst({
-        where: {
-          id: decoded.sub,
-          tenantId: tenant.id,
-        },
-      });
-
-      if (!user || !user.hashedRefreshToken) {
-        throw new UnauthorizedException('Access Denied');
+      const sessionId = decoded.sid as string | undefined;
+      if (!sessionId) {
+        throw new UnauthorizedException('Session information is missing');
       }
 
-      const refreshTokenMatches = await bcrypt.compare(refreshToken, user.hashedRefreshToken);
-      if (!refreshTokenMatches) {
-        throw new UnauthorizedException('Access Denied');
-      }
+      await this.sessionService.validateRefreshSession(decoded.sub, sessionId, refreshToken);
 
-      const tokens = await this.getTokens(user.id, user.walletAddress, user.roles);
-      await this.updateRefreshToken(user.id, tokens.refreshToken, tenant.id);
+      const subscriptionTier = String(decoded.subscriptionTier || 'free').toLowerCase();
+      const tokens = await this.getTokens(
+        decoded.sub,
+        decoded.walletAddress,
+        decoded.roles || ['USER'],
+        sessionId,
+        subscriptionTier,
+      );
+      await this.sessionService.rotateRefreshToken(
+        decoded.sub,
+        sessionId,
+        tokens.refreshToken,
+        request,
+      );
 
       return tokens;
     } catch {
@@ -112,30 +149,23 @@ export class AuthService {
   }
 
   async isTokenBlacklisted(token: string): Promise<boolean> {
-    const isBlacklisted = await this.prisma.tokenBlacklist.findUnique({
-      where: { token },
-    });
-    return !!isBlacklisted;
+    const key = this.blacklistKey(token);
+    return Boolean(await this.redisService.getClient().get(key));
   }
 
-  private async updateRefreshToken(userId: string, refreshToken: string, tenantId: string) {
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-    await this.prisma.user.updateMany({
-      where: {
-        id: userId,
-        tenantId,
-      },
-      data: {
-        hashedRefreshToken,
-      },
-    });
-  }
-
-  private async getTokens(userId: string, walletAddress: string, roles: Role[]) {
+  private async getTokens(
+    userId: string,
+    walletAddress: string,
+    roles: string[],
+    sessionId: string,
+    subscriptionTier: string,
+  ) {
     const payload = {
       sub: userId,
       walletAddress,
       roles,
+      sid: sessionId,
+      subscriptionTier,
     };
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -144,7 +174,10 @@ export class AuthService {
         expiresIn: this.configService.get<any>('JWT_EXPIRATION', '15m'),
       }),
       this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET', 'super_refresh_secret_key_for_development'),
+        secret: this.configService.get<string>(
+          'JWT_REFRESH_SECRET',
+          'super_refresh_secret_key_for_development',
+        ),
         expiresIn: this.configService.get<any>('JWT_REFRESH_EXPIRATION', '7d'),
       }),
     ]);
@@ -153,5 +186,40 @@ export class AuthService {
       accessToken,
       refreshToken,
     };
+  }
+
+  private resolveSubscriptionTier(user: any): string {
+    const headerTier = String(user.headers['x-subscription-tier'] || 'free').toLowerCase();
+
+    if (headerTier === 'free' || headerTier === 'pro' || headerTier === 'enterprise') {
+      return headerTier;
+    }
+
+    return 'free';
+  }
+
+  private resolveRoles(subscriptionTier: string): string[] {
+    if (subscriptionTier === 'enterprise') {
+      return ['SUPER_ADMIN'];
+    }
+
+    if (subscriptionTier === 'pro') {
+      return ['TENANT_ADMIN'];
+    }
+
+    return ['USER'];
+  }
+
+  private deriveUserId(walletAddress: string): string {
+    return createHash('sha256').update(walletAddress).digest('hex');
+  }
+
+  private async blacklistAccessToken(token: string, expiresAt: Date): Promise<void> {
+    const ttlSeconds = Math.max(1, Math.ceil((expiresAt.getTime() - Date.now()) / 1000));
+    await this.redisService.getClient().set(this.blacklistKey(token), '1', 'EX', ttlSeconds);
+  }
+
+  private blacklistKey(token: string): string {
+    return `blacklist:${createHash('sha256').update(token).digest('hex')}`;
   }
 }

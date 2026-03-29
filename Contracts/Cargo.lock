@@ -582,6 +582,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
 
 [[package]]
+name = "integration-tests"
+version = "0.1.0"
+dependencies = [
+ "academy-rewards",
+ "academy-vesting",
+ "messaging",
+ "shared",
+ "social_rewards",
+ "soroban-sdk",
+ "trading",
+]
+
+[[package]]
 name = "itertools"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -652,6 +665,14 @@ name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
+
+[[package]]
+name = "messaging"
+version = "0.1.0"
+dependencies = [
+ "shared",
+ "soroban-sdk",
+]
 
 [[package]]
 name = "miniz_oxide"

@@ -2,14 +2,21 @@
 members = [
     "contracts/trading",
     "contracts/social_rewards",
+    "contracts/messaging",
     "contracts/academy",
     "contracts/academy-rewards",
+    "contracts/synthetic-assets",
+    "contracts/stablecoin_reserve",
+
+    "contracts/tcr",
+    "integration-tests",
     "shared",
 ]
 resolver = "2"
 
 [profile.release]
 opt-level = "z"
+overflow-checks = true
 lto = true
 codegen-units = 1
 strip = true

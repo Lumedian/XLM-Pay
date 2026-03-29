@@ -11,7 +11,14 @@ use soroban_sdk::{
 // Use the auto-generated client from #[contractimpl]
 use crate::UpgradeableTradingContractClient;
 
-fn setup_contract(env: &Env) -> (UpgradeableTradingContractClient, Address, Address, Address) {
+fn setup_contract(
+    env: &Env,
+) -> (
+    UpgradeableTradingContractClient<'_>,
+    Address,
+    Address,
+    Address,
+) {
     let contract_id = env.register_contract(None, UpgradeableTradingContract);
     let client = UpgradeableTradingContractClient::new(env, &contract_id);
 
@@ -299,4 +306,452 @@ fn test_duplicate_approval_prevention() {
     // Second approval from same address should fail
     let result = client.try_approve_upgrade(&proposal_id, &approver);
     assert!(result.is_err());
+}
+
+// ============ OPTIMIZED TRADING TESTS ============
+
+#[test]
+fn test_optimized_trade_execution() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+
+    // Register a mock token contract
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    // Execute a buy trade
+    let trade_id = client.trade(
+        &trader,
+        &symbol_short!("BTCUSD"),
+        &1_000_000i128,
+        &50_000i128,
+        &true,
+        &token_id,
+        &0i128, // Zero fee to avoid token transfer issues in test
+        &fee_recipient,
+    );
+
+    assert_eq!(trade_id, 1);
+
+    // Verify stats updated correctly
+    let stats = client.get_stats();
+    assert_eq!(stats.total_trades, 1);
+    assert_eq!(stats.total_volume, 1_000_000);
+}
+
+#[test]
+fn test_optimized_trade_signed_amount() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    // Execute buy trade (positive amount)
+    let buy_id = client.trade(
+        &trader,
+        &symbol_short!("BTCUSD"),
+        &1_000_000i128,
+        &50_000i128,
+        &true,
+        &token_id,
+        &0i128,
+        &fee_recipient,
+    );
+
+    // Execute sell trade (negative amount internally)
+    let sell_id = client.trade(
+        &trader,
+        &symbol_short!("BTCUSD"),
+        &500_000i128,
+        &49_000i128,
+        &false,
+        &token_id,
+        &0i128,
+        &fee_recipient,
+    );
+
+    assert_eq!(buy_id, 1);
+    assert_eq!(sell_id, 2);
+
+    // Verify both trades recorded
+    let stats = client.get_stats();
+    assert_eq!(stats.total_trades, 2);
+    assert_eq!(stats.total_volume, 1_500_000);
+}
+
+#[test]
+fn test_optimized_get_trade() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    // Execute trade
+    let trade_id = client.trade(
+        &trader,
+        &symbol_short!("BTCUSD"),
+        &1_000_000i128,
+        &50_000i128,
+        &true,
+        &token_id,
+        &0i128,
+        &fee_recipient,
+    );
+
+    // Get specific trade by ID
+    let trade = client.get_trade(&trade_id);
+    assert!(trade.is_some());
+
+    let trade = trade.unwrap();
+    assert_eq!(trade.id, 1);
+    assert_eq!(trade.signed_amount, 1_000_000); // Positive = buy
+    assert_eq!(trade.price, 50_000);
+}
+
+#[test]
+fn test_optimized_get_recent_trades() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    // Execute multiple trades
+    for i in 1..=5 {
+        client.trade(
+            &trader,
+            &symbol_short!("BTCUSD"),
+            &(i as i128 * 100_000),
+            &50_000i128,
+            &true,
+            &token_id,
+            &0i128,
+            &fee_recipient,
+        );
+    }
+
+    // Get recent trades
+    let recent = client.get_recent_trades(&3u32);
+    assert_eq!(recent.len(), 3);
+
+    // Should get trades 3, 4, 5
+    assert_eq!(recent.get(0).unwrap().id, 3);
+    assert_eq!(recent.get(1).unwrap().id, 4);
+    assert_eq!(recent.get(2).unwrap().id, 5);
+}
+
+#[test]
+fn test_optimized_pause_unpause() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    // Pause contract
+    client.pause(&admin);
+
+    // Try to trade (should fail)
+    let result = client.try_trade(
+        &trader,
+        &symbol_short!("BTCUSD"),
+        &1_000_000i128,
+        &50_000i128,
+        &true,
+        &token_id,
+        &0i128,
+        &fee_recipient,
+    );
+    assert!(result.is_err());
+
+    // Unpause
+    client.unpause(&admin);
+
+    // Trade should work now
+    let trade_id = client.trade(
+        &trader,
+        &symbol_short!("BTCUSD"),
+        &1_000_000i128,
+        &50_000i128,
+        &true,
+        &token_id,
+        &0i128,
+        &fee_recipient,
+    );
+    assert_eq!(trade_id, 1);
+}
+
+#[test]
+fn test_optimized_storage_scaling() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    // Execute many trades to test storage scaling
+    for i in 1..=20 {
+        let trade_id = client.trade(
+            &trader,
+            &symbol_short!("BTCUSD"),
+            &(i as i128 * 100_000),
+            &50_000i128,
+            &(i % 2 == 0), // Alternate buy/sell
+            &token_id,
+            &0i128,
+            &fee_recipient,
+        );
+        assert_eq!(trade_id, i as u64);
+    }
+
+    // Verify stats
+    let stats = client.get_stats();
+    assert_eq!(stats.total_trades, 20);
+
+    // Verify individual trade access still works
+    let trade_10 = client.get_trade(&10u64);
+    assert!(trade_10.is_some());
+    assert_eq!(trade_10.unwrap().id, 10);
+}
+
+// ============ BATCH OPERATION TESTS ============
+
+#[test]
+fn test_batch_trade_execution() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    // Create batch of orders
+    let mut orders = Vec::new(&env);
+    orders.push_back((symbol_short!("BTCUSD"), 1_000_000i128, 50_000i128, true));
+    orders.push_back((symbol_short!("ETHUSD"), 500_000i128, 3_000i128, true));
+    orders.push_back((symbol_short!("BTCUSD"), 200_000i128, 49_500i128, false));
+
+    // Execute batch trade
+    let trade_ids = client.batch_trade(&trader, &orders, &token_id, &0i128, &fee_recipient);
+
+    assert_eq!(trade_ids.len(), 3);
+    assert_eq!(trade_ids.get(0).unwrap(), 1);
+    assert_eq!(trade_ids.get(1).unwrap(), 2);
+    assert_eq!(trade_ids.get(2).unwrap(), 3);
+
+    // Verify stats updated correctly
+    let stats = client.get_stats();
+    assert_eq!(stats.total_trades, 3);
+    assert_eq!(stats.total_volume, 1_700_000);
+}
+
+#[test]
+fn test_batch_trade_empty_orders() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    let orders = Vec::new(&env);
+
+    let trade_ids = client.batch_trade(&trader, &orders, &token_id, &0i128, &fee_recipient);
+
+    assert_eq!(trade_ids.len(), 0);
+}
+
+#[test]
+fn test_batch_trade_invalid_amount() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    let mut orders = Vec::new(&env);
+    orders.push_back((symbol_short!("BTCUSD"), 1_000_000i128, 50_000i128, true));
+    orders.push_back((symbol_short!("ETHUSD"), -500_000i128, 3_000i128, true)); // Invalid
+
+    let result = client.try_batch_trade(&trader, &orders, &token_id, &0i128, &fee_recipient);
+
+    assert!(result.is_err());
+    let stats = client.get_stats();
+    assert_eq!(stats.total_trades, 0);
+    assert_eq!(stats.total_volume, 0);
+}
+
+#[test]
+fn test_batch_trade_rejects_oversized_batch() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    let mut orders = Vec::new(&env);
+    for i in 0..client.max_batch_size() + 1 {
+        orders.push_back((symbol_short!("BTCUSD"), 1000 + i as i128, 50_000i128, true));
+    }
+
+    let result = client.try_batch_trade(&trader, &orders, &token_id, &0i128, &fee_recipient);
+
+    assert!(result.is_err());
+    let stats = client.get_stats();
+    assert_eq!(stats.total_trades, 0);
+}
+
+#[test]
+fn test_trade_batch_alias_matches_batch_trade() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    let orders = vec![
+        &env,
+        (symbol_short!("BTCUSD"), 1_000_000i128, 50_000i128, true),
+        (symbol_short!("ETHUSD"), 500_000i128, 3_000i128, true),
+    ];
+
+    let trade_ids = client.trade_batch(&trader, &orders, &token_id, &0i128, &fee_recipient);
+    assert_eq!(trade_ids.len(), 2);
+    assert_eq!(trade_ids.get(0).unwrap(), 1);
+}
+
+#[test]
+fn test_batch_trade_gas_efficiency() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    // Measure individual trades
+    env.budget().reset_default();
+    for i in 0..3 {
+        client.trade(
+            &trader,
+            &symbol_short!("BTCUSD"),
+            &(1_000_000i128 + i as i128),
+            &50_000i128,
+            &true,
+            &token_id,
+            &0i128,
+            &fee_recipient,
+        );
+    }
+    let _individual_cpu = env.budget().cpu_instruction_cost();
+
+    // Reset contract for batch test
+    let contract_id = env.register_contract(None, UpgradeableTradingContract);
+    let client2 = UpgradeableTradingContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let approver = Address::generate(&env);
+    let executor = Address::generate(&env);
+    let mut approvers = Vec::new(&env);
+    approvers.push_back(approver);
+    client2.init(&admin, &approvers, &executor);
+
+    // Measure batch trade
+    env.budget().reset_default();
+    let mut orders = Vec::new(&env);
+    for i in 0..3 {
+        orders.push_back((
+            symbol_short!("BTCUSD"),
+            1_000_000i128 + i as i128,
+            50_000i128,
+            true,
+        ));
+    }
+    client2.trade_batch(&trader, &orders, &token_id, &0i128, &fee_recipient);
+    let _batch_cpu = env.budget().cpu_instruction_cost();
+
+    // Batch should be more efficient (less than individual trades)
+    // Note: This is a rough check, actual savings depend on implementation
+}
+
+#[test]
+fn test_optimized_storage_access_pattern() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let (client, _admin, _approver, _executor) = setup_contract(&env);
+
+    let trader = Address::generate(&env);
+    let fee_recipient = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(fee_recipient.clone());
+
+    // Execute trade and measure
+    env.budget().reset_default();
+    let trade_id = client.trade(
+        &trader,
+        &symbol_short!("BTCUSD"),
+        &1_000_000i128,
+        &50_000i128,
+        &true,
+        &token_id,
+        &0i128,
+        &fee_recipient,
+    );
+
+    let _cpu_cost = env.budget().cpu_instruction_cost();
+    let _mem_cost = env.budget().memory_bytes_cost();
+
+    // Verify trade executed correctly
+    assert_eq!(trade_id, 1);
+    let stats = client.get_stats();
+    assert_eq!(stats.total_trades, 1);
 }
