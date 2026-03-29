@@ -107,6 +107,15 @@ impl SocialRewardsContract {
         let engagement_id: u64 = env.storage().persistent().get(&counter_key).unwrap_or(0u64);
         let next_id = engagement_id + 1;
 
+        // Add reputation score for social activity
+        if let Some(rep_addr) = env
+            .storage()
+            .persistent()
+            .get::<Address>(&symbol_short!("rep"))
+        {
+            shared::reputation::ReputationManager::add_score(&env, &rep_addr, &user, 5);
+        }
+
         // Create engagement record
         let engagement = Engagement {
             id: next_id,
@@ -208,6 +217,17 @@ impl SocialRewardsContract {
         // Record engagement as generic reward activity
         let _engagement_id = Self::record_engagement(env, user, reward_type, amount)?;
 
+        Ok(())
+    }
+
+    pub fn set_reputation_address(env: Env, admin: Address, rep_addr: Address) -> Result<(), RewardError> {
+        admin.require_auth();
+        let current_admin: Address = env.storage().persistent().get(&symbol_short!("admin")).ok_or(RewardError::NotInitialized)?;
+        if admin != current_admin {
+            return Err(RewardError::Unauthorized);
+        }
+
+        env.storage().persistent().set(&symbol_short!("rep"), &rep_addr);
         Ok(())
     }
 }

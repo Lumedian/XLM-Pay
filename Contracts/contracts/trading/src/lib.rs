@@ -25,6 +25,7 @@ mod storage_keys {
     pub const TRADE_COUNT: Symbol = symbol_short!("t_cnt");
     pub const RL_CFG: Symbol = symbol_short!("rl_cfg");
     pub const PREM: Symbol = symbol_short!("prem");
+    pub const REP_ADDR: Symbol = symbol_short!("rep_addr");
 }
 
 /// Trading contract with upgradeability and governance
@@ -201,11 +202,22 @@ fn check_and_consume_trade_rate_limit(env: &Env, trader: &Address) -> Result<(),
 
         // OPTIMIZATION 3: Check premium status before reading usage counters
         let is_premium = is_premium_user(env, trader);
-        let allowed_user_limit = if is_premium {
+        let mut allowed_user_limit = if is_premium {
             cfg.premium_user_limit
         } else {
             cfg.user_limit
         };
+
+        // Reputation multiplier
+        if let Some(rep_addr) = env
+            .storage()
+            .persistent()
+            .get::<Address>(&storage_keys::REP_ADDR)
+        {
+            let multiplier =
+                shared::reputation::ReputationManager::get_trading_limit_multiplier(env, &rep_addr, trader);
+            allowed_user_limit *= multiplier;
+        }
 
         // OPTIMIZATION 4: Read both counters in sequence (can't batch different keys)
         let current_user = get_user_window_usage(env, trader, window);
@@ -273,9 +285,24 @@ fn execute_trade_batch(
 
     let storage = ensure_tradeable(env, trader)?;
 
-    let total_fees = fee_per_trade * (orders.len() as i128);
+    // Apply reputation fee discount
+    let mut actual_fee_per_trade = fee_per_trade;
+    if let Some(rep_addr) = env.storage().persistent().get::<Address>(&storage_keys::REP_ADDR) {
+        let discount_bps =
+            shared::reputation::ReputationManager::get_fee_discount(env, &rep_addr, trader);
+        if discount_bps > 0 {
+            actual_fee_per_trade = fee_per_trade * (10000 - discount_bps as i128) / 10000;
+        }
+    }
+
+    let total_fees = actual_fee_per_trade * (orders.len() as i128);
     FeeManager::collect_fee(env, fee_token, trader, fee_recipient, total_fees)
         .map_err(|_| TradeError::InsufficientBalance)?;
+
+    // Add reputation score for successful trade
+    if let Some(rep_addr) = env.storage().persistent().get::<Address>(&storage_keys::REP_ADDR) {
+        shared::reputation::ReputationManager::add_score(env, &rep_addr, trader, 10);
+    }
 
     let current_timestamp = env.ledger().timestamp();
     let mut trade_id: u64 = storage.get(&storage_keys::TRADE_COUNT).unwrap_or(0);
@@ -414,13 +441,28 @@ impl UpgradeableTradingContract {
 
         let storage = ensure_tradeable(&env, &trader)?;
 
+        // Apply reputation fee discount
+        let mut actual_fee_amount = fee_amount;
+        if let Some(rep_addr) = storage.get::<Address>(&storage_keys::REP_ADDR) {
+            let discount_bps =
+                shared::reputation::ReputationManager::get_fee_discount(&env, &rep_addr, &trader);
+            if discount_bps > 0 {
+                actual_fee_amount = fee_amount * (10000 - discount_bps as i128) / 10000;
+            }
+        }
+
         // OPTIMIZATION 3: Cache timestamp and compute signed_amount once
         let current_timestamp = env.ledger().timestamp();
         let signed_amount = if is_buy { amount } else { -amount };
 
         // OPTIMIZATION 4: Collect fee before storage writes (fail fast)
-        FeeManager::collect_fee(&env, &fee_token, &trader, &fee_recipient, fee_amount)
+        FeeManager::collect_fee(&env, &fee_token, &trader, &fee_recipient, actual_fee_amount)
             .map_err(|_| TradeError::InsufficientBalance)?;
+
+        // Add reputation score for successful trade
+        if let Some(rep_addr) = storage.get::<Address>(&storage_keys::REP_ADDR) {
+            shared::reputation::ReputationManager::add_score(&env, &rep_addr, &trader, 10);
+        }
 
         // OPTIMIZATION 5: Batch storage reads - get both values at once
         let trade_id: u64 = storage.get(&storage_keys::TRADE_COUNT).unwrap_or(0) + 1;
@@ -454,7 +496,7 @@ impl UpgradeableTradingContract {
             FeeCollected {
                 trade_id,
                 trader: trader.clone(),
-                fee_amount,
+                fee_amount: actual_fee_amount,
                 fee_recipient,
                 fee_token,
                 timestamp: current_timestamp,
@@ -502,6 +544,22 @@ impl UpgradeableTradingContract {
         };
 
         env.storage().persistent().set(&storage_keys::RL_CFG, &cfg);
+        Ok(())
+    }
+
+    /// Set reputation address (ACL protected)
+    pub fn set_reputation_address(
+        env: Env,
+        admin: Address,
+        reputation_address: Address,
+    ) -> Result<(), TradeError> {
+        admin.require_auth();
+        require_initialized(&env)?;
+        ACL::require_permission(&env, &admin, &Symbol::new(&env, "set_rep"));
+
+        env.storage()
+            .persistent()
+            .set(&storage_keys::REP_ADDR, &reputation_address);
         Ok(())
     }
 

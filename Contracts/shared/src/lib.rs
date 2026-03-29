@@ -13,6 +13,7 @@ pub struct ContractConfig {
 pub mod acl;
 pub mod fees;
 pub mod governance;
+pub mod reputation;
 
 /// Standard contract error codes
 pub mod errors {
