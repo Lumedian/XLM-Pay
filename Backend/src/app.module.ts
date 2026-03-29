@@ -2,13 +2,17 @@ import { AbiRegistryModule } from './abi-registry/abi-registry.module';
 import { ExperimentsModule } from './experiments/experiments.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { KycModule } from './kyc/kyc.module';
-
+import { MarketSentimentModule } from './market-sentiment/market-sentiment.module';
 
 import { AdminModule } from './admin/admin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { WebsocketModule } from './websocket/websocket.module';
+import { PaymentModule } from './payment/payment.module';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { BackupModule } from './backup/backup.module';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database.module';
@@ -18,7 +22,6 @@ import { IndexAnalysisModule } from './index-analysis/index-analysis.module';
 import { LifecycleModule } from './lifecycle/lifecycle.module';
 import { LoggingModule } from './logging/logging.module';
 import { Module } from '@nestjs/common';
-import { PaymentModule } from './payment/payment.module';
 import { FraudModule } from './fraud/fraud.module';
 import { PrismaModule } from './prisma.module';
 import { QuotaModule } from './quota/quota.module';
@@ -29,15 +32,15 @@ import { ReputationModule } from './reputation/reputation.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SessionModule } from './sessions/session.module';
 import { TenantModule } from './tenant/tenant.module';
-import { ThrottlerModule } from '@nestjs/throttler';
-import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { UserController } from './user.controller';
 import { WebhooksModule } from './webhooks/webhooks.module';
-import { WebsocketModule } from './websocket/websocket.module';
 import { validateEnv } from './config/env.validation';
+import { CollateralModule } from './collateral/collateral.module';
+import { GeolocationModule } from './geolocation/geolocation.module';
 
 import { SupportModule } from './support/support.module';
 import { MultisigModule } from './multisig/multisig.module';
+
 import { VestingModule } from './vesting/vesting.module';
 import { LiquidityMiningModule } from './liquidity-mining/liquidity-mining.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
@@ -55,7 +58,14 @@ import { DataResidencyModule } from './data-residency/data-residency.module';
 import { PredictiveMaintenanceModule } from './predictive-maintenance/predictive-maintenance.module';
 import { SecretsManagementModule } from './secrets-management/secrets-management.module';
 import { TransactionQueueModule } from './transaction-queue/transaction-queue.module';
+import { SupplyChainFinanceModule } from './supply-chain-finance/supply-chain-finance.module';
 import { LiquidityAggregationModule } from './liquidity-aggregation/liquidity-aggregation.module';
+import { CrossChainSwapModule } from './cross-chain-swap/cross-chain-swap.module';
+import { PredictiveSettlementModule } from './predictive-settlement/predictive-settlement.module';
+import { HFTModule } from './hft/hft.module';
+import { QuantumCryptoModule } from './crypto/quantum/quantum-crypto.module';
+import { AIAuditorModule } from './ai-auditor/ai-auditor.module';
+
 
 @Module({
   imports: [
@@ -110,9 +120,41 @@ import { LiquidityAggregationModule } from './liquidity-aggregation/liquidity-ag
     AbiRegistryModule,
     SupportModule,
     MultisigModule,
+    MarketSentimentModule,
+
+    MonitoringModule,
+
     AnalyticsModule,
     ExperimentsModule,
     KycModule,
+    CollateralModule,
+    GeolocationModule,
+    VestingModule,
+    LiquidityMiningModule,
+    MonitoringModule,
+    CircuitBreakerModule,
+    TransactionQueueModule,
+    DataRetentionModule,
+    GraphqlModule,
+    ObjectStorageModule,
+    ZkModule,
+    IdentityModule,
+    ClearingModule,
+    DocumentProcessingModule,
+    FailoverModule,
+    CostMonitoringModule,
+    DataResidencyModule,
+    PredictiveMaintenanceModule,
+    SecretsManagementModule,
+    SupplyChainFinanceModule,
+    LiquidityAggregationModule,
+    CrossChainSwapModule,
+    PredictiveSettlementModule,
+    CollateralModule,
+    GeolocationModule,
+    HFTModule,
+    QuantumCryptoModule,
+    AIAuditorModule,
 
   ],
   controllers: [AppController, UserController, DocsController],

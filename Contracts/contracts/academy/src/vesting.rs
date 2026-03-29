@@ -1,4 +1,6 @@
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Vec};
+
+const MAX_BATCH_CLAIMS: u32 = 25;
 
 /// Vesting schedule for an academy reward
 #[contracttype]
@@ -85,6 +87,7 @@ pub enum VestingError {
     Revoked = 4007,
     InvalidTimelock = 4008,
     NotEnoughTimeForRevoke = 4009,
+    BatchTooLarge = 4010,
 }
 
 impl From<VestingError> for soroban_sdk::Error {
@@ -107,6 +110,48 @@ impl From<soroban_sdk::Error> for VestingError {
 
 #[contract]
 pub struct AcademyVestingContract;
+
+fn load_schedules(env: &Env) -> Result<soroban_sdk::Map<u64, VestingSchedule>, VestingError> {
+    env.storage()
+        .persistent()
+        .get(&symbol_short!("sched"))
+        .ok_or(VestingError::GrantNotFound)
+}
+
+fn persist_schedules(env: &Env, schedules: &soroban_sdk::Map<u64, VestingSchedule>) {
+    env.storage()
+        .persistent()
+        .set(&symbol_short!("sched"), schedules);
+}
+
+fn claimable_amount(
+    env: &Env,
+    grant_id: u64,
+    beneficiary: &Address,
+    schedule: &VestingSchedule,
+) -> Result<i128, VestingError> {
+    if schedule.beneficiary != *beneficiary {
+        return Err(VestingError::Unauthorized);
+    }
+
+    if schedule.claimed {
+        return Err(VestingError::AlreadyClaimed);
+    }
+
+    if schedule.revoked {
+        return Err(VestingError::Revoked);
+    }
+
+    let current_time = env.ledger().timestamp();
+    let vested_amount = AcademyVestingContract::calculate_vested_amount(schedule, current_time)?;
+
+    if vested_amount == 0 {
+        return Err(VestingError::NotVested);
+    }
+
+    let _ = grant_id;
+    Ok(vested_amount)
+}
 
 #[contractimpl]
 impl AcademyVestingContract {
@@ -247,38 +292,9 @@ impl AcademyVestingContract {
     pub fn claim(env: Env, grant_id: u64, beneficiary: Address) -> Result<i128, VestingError> {
         beneficiary.require_auth();
 
-        // Get vesting schedule
-        let schedules_key = symbol_short!("sched");
-        let mut schedules: soroban_sdk::Map<u64, VestingSchedule> = env
-            .storage()
-            .persistent()
-            .get(&schedules_key)
-            .ok_or(VestingError::GrantNotFound)?;
-
+        let mut schedules = load_schedules(&env)?;
         let mut schedule = schedules.get(grant_id).ok_or(VestingError::GrantNotFound)?;
-
-        // Verify beneficiary matches
-        if schedule.beneficiary != beneficiary {
-            return Err(VestingError::Unauthorized);
-        }
-
-        // Check if already claimed
-        if schedule.claimed {
-            return Err(VestingError::AlreadyClaimed);
-        }
-
-        // Check if revoked
-        if schedule.revoked {
-            return Err(VestingError::Revoked);
-        }
-
-        // Calculate vested amount
-        let current_time = env.ledger().timestamp();
-        let vested_amount = Self::calculate_vested_amount(&schedule, current_time)?;
-
-        if vested_amount == 0 {
-            return Err(VestingError::NotVested);
-        }
+        let vested_amount = claimable_amount(&env, grant_id, &beneficiary, &schedule)?;
 
         // Verify contract has sufficient balance
         let token_key = symbol_short!("token");
@@ -298,7 +314,7 @@ impl AcademyVestingContract {
         // Mark as claimed (atomic operation)
         schedule.claimed = true;
         schedules.set(grant_id, schedule.clone());
-        env.storage().persistent().set(&schedules_key, &schedules);
+        persist_schedules(&env, &schedules);
 
         // Transfer tokens
         token_client.transfer(
@@ -333,6 +349,78 @@ impl AcademyVestingContract {
         Ok(vested_amount)
     }
 
+    /// Claim multiple vested rewards atomically for a single beneficiary.
+    pub fn batch_claim(
+        env: Env,
+        grant_ids: Vec<u64>,
+        beneficiary: Address,
+    ) -> Result<i128, VestingError> {
+        beneficiary.require_auth();
+
+        if grant_ids.is_empty() {
+            return Ok(0);
+        }
+
+        if grant_ids.len() > MAX_BATCH_CLAIMS {
+            return Err(VestingError::BatchTooLarge);
+        }
+
+        let mut schedules = load_schedules(&env)?;
+        let token: Address = env
+            .storage()
+            .persistent()
+            .get(&symbol_short!("token"))
+            .ok_or(VestingError::Unauthorized)?;
+        let token_client = soroban_sdk::token::Client::new(&env, &token);
+        let current_balance = token_client.balance(&env.current_contract_address());
+        let current_time = env.ledger().timestamp();
+
+        let mut total_claimable = 0i128;
+        let mut updated_schedules = Vec::new(&env);
+
+        for grant_id in grant_ids.iter() {
+            let mut schedule = schedules.get(grant_id).ok_or(VestingError::GrantNotFound)?;
+            let claim_amount = claimable_amount(&env, grant_id, &beneficiary, &schedule)?;
+
+            total_claimable += claim_amount;
+            schedule.claimed = true;
+            updated_schedules.push_back((grant_id, schedule, claim_amount));
+        }
+
+        if current_balance < total_claimable {
+            return Err(VestingError::InsufficientBalance);
+        }
+
+        for (grant_id, schedule, claim_amount) in updated_schedules.iter() {
+            schedules.set(grant_id, schedule);
+            token_client.transfer(&env.current_contract_address(), &beneficiary, &claim_amount);
+
+            env.events().publish(
+                (symbol_short!("claim"),),
+                ClaimEvent {
+                    grant_id,
+                    beneficiary: beneficiary.clone(),
+                    amount: claim_amount,
+                    claimed_at: current_time,
+                },
+            );
+
+            env.events().publish(
+                (symbol_short!("v_claimed"),),
+                VestingClaimed {
+                    grant_id,
+                    beneficiary: beneficiary.clone(),
+                    amount: claim_amount,
+                    claimed_at: current_time,
+                },
+            );
+        }
+
+        persist_schedules(&env, &schedules);
+
+        Ok(total_claimable)
+    }
+
     /// Revoke a vesting schedule (governance/admin only, with timelock)
     pub fn revoke(
         env: Env,
@@ -355,12 +443,7 @@ impl AcademyVestingContract {
         }
 
         // Get vesting schedule
-        let schedules_key = symbol_short!("sched");
-        let mut schedules: soroban_sdk::Map<u64, VestingSchedule> = env
-            .storage()
-            .persistent()
-            .get(&schedules_key)
-            .ok_or(VestingError::GrantNotFound)?;
+        let mut schedules = load_schedules(&env)?;
 
         let mut schedule = schedules.get(grant_id).ok_or(VestingError::GrantNotFound)?;
 
@@ -389,7 +472,7 @@ impl AcademyVestingContract {
         schedule.revoked = true;
         schedule.revoke_time = current_time;
         schedules.set(grant_id, schedule.clone());
-        env.storage().persistent().set(&schedules_key, &schedules);
+        persist_schedules(&env, &schedules);
 
         // Emit revoke event
         let revoke_event = RevokeEvent {
@@ -407,24 +490,14 @@ impl AcademyVestingContract {
 
     /// Query vesting schedule details
     pub fn get_vesting(env: Env, grant_id: u64) -> Result<VestingSchedule, VestingError> {
-        let schedules_key = symbol_short!("sched");
-        let schedules: soroban_sdk::Map<u64, VestingSchedule> = env
-            .storage()
-            .persistent()
-            .get(&schedules_key)
-            .ok_or(VestingError::GrantNotFound)?;
+        let schedules = load_schedules(&env)?;
 
         schedules.get(grant_id).ok_or(VestingError::GrantNotFound)
     }
 
     /// Calculate vested amount at current time
     pub fn get_vested_amount(env: Env, grant_id: u64) -> Result<i128, VestingError> {
-        let schedules_key = symbol_short!("sched");
-        let schedules: soroban_sdk::Map<u64, VestingSchedule> = env
-            .storage()
-            .persistent()
-            .get(&schedules_key)
-            .ok_or(VestingError::GrantNotFound)?;
+        let schedules = load_schedules(&env)?;
 
         let schedule = schedules.get(grant_id).ok_or(VestingError::GrantNotFound)?;
 
@@ -492,5 +565,9 @@ impl AcademyVestingContract {
             .ok_or(VestingError::Unauthorized)?;
 
         Ok((admin, token, governance))
+    }
+
+    pub fn max_batch_claims() -> u32 {
+        MAX_BATCH_CLAIMS
     }
 }

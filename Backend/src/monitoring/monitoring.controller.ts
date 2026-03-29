@@ -1,58 +1,48 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Param,
-  Query,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
-import { MonitoringService } from './monitoring.service';
+import { Controller, Get } from '@nestjs/common';
+import { HealthCheck, HealthCheckService, HttpHealthIndicator, MemoryHealthIndicator } from '@nestjs/terminus';
+import { PrismaHealthIndicator } from './indicators/prisma-health.indicator';
+import { RedisHealthIndicator } from './indicators/redis-health.indicator';
+import { StellarHealthIndicator } from './indicators/stellar-health.indicator';
+import { RabbitMqHealthIndicator } from './indicators/rabbitmq-health.indicator';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 
+@ApiTags('Monitoring')
 @Controller('monitoring')
 export class MonitoringController {
-  constructor(private readonly monitoringService: MonitoringService) {}
+  constructor(
+    private health: HealthCheckService,
+    private prismaHealth: PrismaHealthIndicator,
+    private redisHealth: RedisHealthIndicator,
+    private stellarHealth: StellarHealthIndicator,
+    private rabbitMqHealth: RabbitMqHealthIndicator,
+    private memory: MemoryHealthIndicator,
+    private http: HttpHealthIndicator,
+  ) {}
 
-  @Get('status')
-  async getStatusPage() {
-    return this.monitoringService.getStatusPage();
+  @Get('health')
+  @HealthCheck()
+  @ApiOperation({ summary: 'Check if the service is alive and core dependencies are up' })
+  check() {
+    return this.health.check([
+      () => this.prismaHealth.isHealthy('database'),
+      () => this.redisHealth.isHealthy('redis'),
+    ]);
   }
 
-  @Get('latency/:testName')
-  async getLatencyPercentiles(
-    @Param('testName') testName: string,
-    @Query('hours') hours?: string,
-  ) {
-    const hoursNum = hours ? parseFloat(hours) : 24;
-    return this.monitoringService.getLatencyPercentiles(testName, hoursNum);
-  }
-
-  @Get('sla')
-  async getSlaReport(
-    @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string,
-  ) {
-    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const end = endDate ? new Date(endDate) : new Date();
-    return this.monitoringService.getSlaReport(start, end);
-  }
-
-  @Get('trends/:testName')
-  async getTrends(
-    @Param('testName') testName: string,
-    @Query('days') days?: string,
-  ) {
-    const daysNum = days ? parseInt(days, 10) : 7;
-    return this.monitoringService.getTrends(testName, daysNum);
-  }
-
-  @Post('run')
-  @HttpCode(HttpStatus.ACCEPTED)
-  async runSyntheticTests() {
-    // Fire and forget - runs asynchronously
-    this.monitoringService.runSyntheticTests().catch((err) => {
-      // Errors are logged internally by the service
-    });
-    return { message: 'Synthetic test run triggered', timestamp: new Date() };
+  @Get('health/detailed')
+  @HealthCheck()
+  @ApiOperation({ summary: 'Comprehensive health check for all internal and external dependencies' })
+  checkDetailed() {
+    return this.health.check([
+      () => this.prismaHealth.isHealthy('database'),
+      () => this.redisHealth.isHealthy('redis'),
+      () => this.stellarHealth.isHealthy('stellar_blockchain'),
+      () => this.rabbitMqHealth.isHealthy('messaging_queue'),
+      () => this.memory.checkHeap('memory_heap', 512 * 1024 * 1024), // 512MB
+      () => this.memory.checkRSS('memory_rss', 1024 * 1024 * 1024), // 1GB
+      () => this.http.pingCheck('stellar_horizon_public', 'https://horizon.stellar.org'),
+      () => this.http.pingCheck('stripe_api', 'https://api.stripe.com'),
+      () => this.http.pingCheck('sendgrid_api', 'https://api.sendgrid.com/v3/stats', { timeout: 3000 }),
+    ]);
   }
 }
