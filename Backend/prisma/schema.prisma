@@ -1415,3 +1415,197 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+// ===== AMM BOT FRAMEWORK MODELS =====
+
+enum StrategyType {
+  CONSTANT_PRODUCT
+  CONCENTRATED_LIQUIDITY
+  DYNAMIC_FEES
+}
+
+enum StrategyStatus {
+  ACTIVE
+  PAUSED
+  STOPPED
+  ERROR
+}
+
+enum PositionStatus {
+  ACTIVE
+  INACTIVE
+  CLOSED
+}
+
+enum PositionType {
+  LIQUIDITY
+  SINGLE_ASSET
+}
+
+enum MetricType {
+  PNL
+  FEES_EARNED
+  IMPERMANENT_LOSS
+  TVL
+  APR
+  VOLUME
+}
+
+enum RiskType {
+  MAX_POSITION_SIZE
+  MAX_DRAWDOWN
+  IMPERMANENT_LOSS_LIMIT
+  PRICE_DEVIATION_LIMIT
+  CORRELATION_LIMIT
+  CONCENTRATION_LIMIT
+}
+
+enum RiskStatus {
+  ACTIVE
+  TRIGGERED
+  DISABLED
+}
+
+enum DexType {
+  UNISWAP_V3
+  CURVE
+  BALANCER
+  STELLAR_DEX
+}
+
+enum DexStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+model BotStrategy {
+  id                String          @id @default(cuid())
+  name              String
+  userId            String          @map("user_id")
+  strategyType      StrategyType    @map("strategy_type")
+  status            StrategyStatus  @default(ACTIVE)
+  configuration     Json            // Strategy-specific configuration
+  dexConfigurations Json            @map("dex_configurations") // Array of DEX configs
+  totalDeposited    Decimal         @default(0) @map("total_deposited") @db.Decimal(36, 18)
+  totalWithdrawn    Decimal         @default(0) @map("total_withdrawn") @db.Decimal(36, 18)
+  currentLiquidity  Decimal         @default(0) @map("current_liquidity") @db.Decimal(36, 18)
+  totalFeesEarned   Decimal         @default(0) @map("total_fees_earned") @db.Decimal(36, 18)
+  impermanentLoss   Decimal         @default(0) @map("impermanent_loss") @db.Decimal(36, 18)
+  lastRebalanceAt   DateTime?       @map("last_rebalance_at")
+  nextRebalanceAt   DateTime?       @map("next_rebalance_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  positions         BotPosition[]
+  riskParameters    RiskParameter[]
+  performanceMetrics PerformanceMetric[]
+
+  @@index([userId])
+  @@index([strategyType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("bot_strategies")
+}
+
+model BotPosition {
+  id                String          @id @default(cuid())
+  strategyId        String          @map("strategy_id")
+  dexName           String          @map("dex_name")
+  poolAddress       String          @map("pool_address")
+  tokenA            String          @map("token_a")
+  tokenB            String          @map("token_b")
+  positionType      PositionType    @map("position_type")
+  status            PositionStatus  @default(ACTIVE)
+  amountA           Decimal         @map("amount_a") @db.Decimal(36, 18)
+  amountB           Decimal         @map("amount_b") @db.Decimal(36, 18)
+  feesEarnedA       Decimal         @default(0) @map("fees_earned_a") @db.Decimal(36, 18)
+  feesEarnedB       Decimal         @default(0) @map("fees_earned_b") @db.Decimal(36, 18)
+  impermanentLoss   Decimal         @default(0) @map("impermanent_loss") @db.Decimal(36, 18)
+  priceRange        Json?           @map("price_range")
+  liquidityData     Json?           @map("liquidity_data")
+  lastFeeCollectionAt DateTime?      @map("last_fee_collection_at")
+  lastRebalanceAt   DateTime?       @map("last_rebalance_at")
+  dexSpecificData   Json?           @map("dex_specific_data")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  strategy          BotStrategy     @relation(fields: [strategyId], references: [id])
+
+  @@index([strategyId])
+  @@index([dexName])
+  @@index([poolAddress])
+  @@index([status])
+  @@map("bot_positions")
+}
+
+model PerformanceMetric {
+  id                String      @id @default(cuid())
+  strategyId        String      @map("strategy_id")
+  metricType        MetricType  @map("metric_type")
+  value             Decimal     @db.Decimal(36, 18)
+  previousValue     Decimal?    @map("previous_value") @db.Decimal(36, 18)
+  changePercentage  Decimal?    @map("change_percentage") @db.Decimal(36, 18)
+  breakdown         Json?       // Breakdown by DEX, token, timeframe
+  metadata          Json?       // Additional metric metadata
+  timestamp         DateTime    // Metric timestamp
+  timeframe         String      // '1h', '1d', '1w', '1m'
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  strategy          BotStrategy @relation(fields: [strategyId], references: [id])
+
+  @@index([strategyId])
+  @@index([metricType])
+  @@index([timestamp])
+  @@index([timeframe])
+  @@map("performance_metrics")
+}
+
+model RiskParameter {
+  id                String      @id @default(cuid())
+  strategyId        String      @map("strategy_id")
+  riskType          RiskType    @map("risk_type")
+  status            RiskStatus  @default(ACTIVE)
+  threshold         Decimal     @db.Decimal(36, 18)
+  currentValue      Decimal?    @map("current_value") @db.Decimal(36, 18)
+  triggerValue      Decimal?    @map("trigger_value") @db.Decimal(36, 18)
+  parameters        Json?       // Risk-specific parameters
+  lastTriggeredAt   DateTime?   @map("last_triggered_at")
+  triggerCount       Int         @default(0) @map("trigger_count")
+  description       String?     // Risk parameter description
+  alertConfig       Json?       @map("alert_config") // Alert configuration
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  strategy          BotStrategy @relation(fields: [strategyId], references: [id])
+
+  @@index([strategyId])
+  @@index([riskType])
+  @@index([status])
+  @@map("risk_parameters")
+}
+
+model DexConfiguration {
+  id                String      @id @default(cuid())
+  name              String
+  dexType           DexType     @map("dex_type")
+  status            DexStatus   @default(ACTIVE)
+  configuration     Json        // DEX-specific configuration
+  supportedTokens   Json        @map("supported_tokens") // Array of supported tokens
+  supportedPools    Json        @map("supported_pools") // Array of supported pools
+  successRate       Decimal     @default(0) @map("success_rate") @db.Decimal(5, 2)
+  averageGasCost    Decimal     @default(0) @map("average_gas_cost") @db.Decimal(36, 18)
+  lastHealthCheck   DateTime?   @map("last_health_check")
+  healthMetrics     Json?       @map("health_metrics") // Health check metrics
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([dexType])
+  @@index([status])
+  @@map("dex_configurations")
+}

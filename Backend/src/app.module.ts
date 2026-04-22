@@ -3,6 +3,7 @@ import { ExperimentsModule } from './experiments/experiments.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { KycModule } from './kyc/kyc.module';
 import { CdpModule } from './cdp/cdp.module';
+import { AmmBotModule } from './amm-bot/amm-bot.module';
 
 import { AdminModule } from './admin/admin.module';
 import { AppController } from './app.controller';
@@ -96,6 +97,7 @@ import { ChaosModule } from './chaos/chaos.module';
     KycModule,
     CdpModule,
     ChaosModule,
+    AmmBotModule,
   ],
   controllers: [AppController, UserController, DocsController],
   providers: [AppService],
