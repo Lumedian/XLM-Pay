@@ -278,3 +278,56 @@ model ReinsuranceContract {
 
   @@map("reinsurance_contracts")
 }
+
+// Privacy Analytics Models
+
+model PrivacyBudget {
+  id             String   @id @default(cuid())
+  userId         String   @unique @map("user_id")
+  totalBudget    Float    @default(1.0) @map("total_budget")
+  usedBudget     Float    @default(0.0) @map("used_budget")
+  lastReset      DateTime @default(now()) @map("last_reset")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  queries        PrivacyBudgetQuery[]
+
+  @@map("privacy_budgets")
+}
+
+model PrivacyBudgetQuery {
+  id           String    @id @default(cuid())
+  budgetId     String    @map("budget_id")
+  budget       PrivacyBudget @relation(fields: [budgetId], references: [id])
+  queryId      String    @unique @map("query_id")
+  epsilon      Float
+  description  String?
+  status       QueryStatus @default(COMPLETED)
+  timestamp    DateTime  @default(now())
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@map("privacy_budget_queries")
+}
+
+model AnalyticsCache {
+  id           String   @id @default(cuid())
+  cacheKey     String   @unique @map("cache_key")
+  queryType    String   @map("query_type")
+  parameters   Json     // Query parameters
+  result       Json     // Differential privacy result
+  epsilon      Float
+  timestamp    DateTime @default(now())
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([cacheKey])
+  @@index([expiresAt])
+  @@map("analytics_cache")
+}
+
+enum QueryStatus {
+  COMPLETED
+  RESERVED
+  FAILED
+}

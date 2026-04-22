@@ -12,6 +12,7 @@ import { IndexerModule } from './indexer/indexer.module';
 import { NotificationModule } from './notification/notification.module';
 import { StorageModule } from './storage/storage.module';
 import { InsuranceModule } from '../insurance/insurance.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { LoggingMiddleware } from './common/middleware/logging.middleware';
 import { AppLogger } from './common/logger/app.logger';
@@ -43,6 +44,7 @@ import { AppCacheModule } from './cache/cache.module';
     NotificationModule,
     StorageModule,
     InsuranceModule,
+    AnalyticsModule,
     AppCacheModule,
   ],
   controllers: [AppController, UserController],
