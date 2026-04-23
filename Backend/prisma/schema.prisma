@@ -57,6 +57,13 @@ model User {
   cdpIdentityMatches   CdpIdentityMatch[]    @relation("CdpIdentityMatches")
   cdpConsents          CdpConsent[]          @relation("CdpConsents")
 
+  // Identity Linking Relations
+  linkedIdentities     LinkedIdentity[]
+  walletIdentities     WalletIdentity[]
+  recoveryMethods      AccountRecoveryMethod[]
+  privacySettings      IdentityPrivacySettings?
+  ssoSessions          SsoSession[]
+
   @@unique([tenantId, email])
   @@unique([tenantId, walletAddress])
   @@index([tenantId, id])
@@ -1395,26 +1402,6 @@ model CdpConsent {
   @@map("cdp_consents")
 }
 
-// Audit Log Model
-model AuditLog {
-  id          String   @id @default(cuid())
-  userId      String?  @map("user_id")
-  action      String   // CONSENT_UPDATE, SEGMENT_CHANGE, etc.
-  entityType  String   @map("entity_type") // CDP_CONSENT, CDP_SEGMENT, etc.
-  entityId    String   @map("entity_id")
-  oldValue    Json?    @map("old_value")
-  newValue    Json?    @map("new_value")
-  metadata    Json?    // Additional context
-  ipAddress   String?  @map("ip_address")
-  userAgent   String?  @map("user_agent")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  @@index([userId])
-  @@index([action])
-  @@index([entityType])
-  @@index([createdAt])
-  @@map("audit_logs")
-}
 
 // ===== AMM BOT FRAMEWORK MODELS =====
 
@@ -1608,4 +1595,263 @@ model DexConfiguration {
   @@index([dexType])
   @@index([status])
   @@map("dex_configurations")
+}
+
+// ─── Cross-Platform Identity Linking System ───────────────────────────────────────
+
+enum IdentityProvider {
+  GOOGLE
+  FACEBOOK
+  APPLE
+  TWITTER
+  GITHUB
+  EMAIL
+  STELLAR
+  ETHEREUM
+  SOLANA
+}
+
+enum IdentityStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  DISABLED
+  REJECTED
+  SUSPENDED
+}
+
+enum VerificationMethod {
+  EMAIL_CODE
+  SMS_CODE
+  OAUTH_CHALLENGE
+  SIGNATURE_CHALLENGE
+  TOTP
+}
+
+enum PrivacyLevel {
+  PUBLIC
+  FRIENDS_ONLY
+  PRIVATE
+}
+
+model LinkedIdentity {
+  id                String          @id @default(cuid())
+  userId            String          @map("user_id")
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          IdentityProvider
+  providerId        String          @map("provider_id") // External ID from provider
+  providerEmail     String?         @map("provider_email")
+  providerUsername  String?         @map("provider_username")
+  providerData      Json?           @map("provider_data") // Raw provider data
+  status            IdentityStatus  @default(PENDING_VERIFICATION)
+  isPrimary         Boolean         @default(false) @map("is_primary")
+  isVerified        Boolean         @default(false) @map("is_verified")
+  privacyLevel      PrivacyLevel    @default(PRIVATE) @map("privacy_level")
+  lastVerifiedAt    DateTime?       @map("last_verified_at")
+  verificationData  Json?           @map("verification_data")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  verificationChallenges IdentityVerificationChallenge[]
+  securityAlerts       IdentitySecurityAlert[]
+
+  @@unique([userId, provider, providerId])
+  @@unique([userId, providerEmail])
+  @@index([userId])
+  @@index([provider])
+  @@index([status])
+  @@index([isPrimary])
+  @@index([isVerified])
+  @@map("linked_identities")
+}
+
+model IdentityVerificationChallenge {
+  id                String              @id @default(cuid())
+  linkedIdentityId  String              @map("linked_identity_id")
+  linkedIdentity    LinkedIdentity      @relation(fields: [linkedIdentityId], references: [id], onDelete: Cascade)
+  method            VerificationMethod
+  challenge         String              // The challenge (code, message to sign, etc.)
+  response          String?             // User's response
+  expiresAt         DateTime            @map("expires_at")
+  isCompleted       Boolean             @default(false) @map("is_completed")
+  isSuccessful      Boolean?            @map("is_successful")
+  attempts          Int                 @default(0)
+  maxAttempts       Int                 @default(3)
+  ipAddress         String?             @map("ip_address")
+  userAgent         String?             @map("user_agent")
+  metadata          Json?               // Additional challenge data
+  createdAt         DateTime            @default(now()) @map("created_at")
+  completedAt       DateTime?           @map("completed_at")
+
+  @@index([linkedIdentityId])
+  @@index([method])
+  @@index([isCompleted])
+  @@index([expiresAt])
+  @@map("identity_verification_challenges")
+}
+
+model IdentitySecurityAlert {
+  id                String              @id @default(cuid())
+  linkedIdentityId  String              @map("linked_identity_id")
+  linkedIdentity    LinkedIdentity      @relation(fields: [linkedIdentityId], references: [id], onDelete: Cascade)
+  alertType         String              @map("alert_type") // NEW_LINK, UNUSUAL_LOGIN, VERIFICATION_FAILED, etc.
+  severity          String              @default("medium") // low, medium, high, critical
+  message           String
+  details           Json?               // Alert-specific details
+  ipAddress         String?             @map("ip_address")
+  userAgent         String?             @map("user_agent")
+  isRead            Boolean             @default(false) @map("is_read")
+  isResolved        Boolean             @default(false) @map("is_resolved")
+  resolvedBy        String?             @map("resolved_by") // User ID who resolved
+  resolvedAt        DateTime?           @map("resolved_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+
+  @@index([linkedIdentityId])
+  @@index([alertType])
+  @@index([severity])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("identity_security_alerts")
+}
+
+model WalletIdentity {
+  id                String          @id @default(cuid())
+  userId            String          @map("user_id")
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletType        String          @map("wallet_type") // stellar, ethereum, solana
+  walletAddress     String          @map("wallet_address")
+  isVerified        Boolean         @default(false) @map("is_verified")
+  verificationData   Json?           @map("verification_data") // Signature verification data
+  nickname          String?         // User-friendly name
+  privacyLevel      PrivacyLevel    @default(PRIVATE) @map("privacy_level")
+  lastUsedAt        DateTime?       @map("last_used_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  verificationChallenges WalletVerificationChallenge[]
+
+  @@unique([userId, walletType, walletAddress])
+  @@index([userId])
+  @@index([walletType])
+  @@index([isVerified])
+  @@map("wallet_identities")
+}
+
+model WalletVerificationChallenge {
+  id                String              @id @default(cuid())
+  walletIdentityId  String              @map("wallet_identity_id")
+  walletIdentity    WalletIdentity      @relation(fields: [walletIdentityId], references: [id], onDelete: Cascade)
+  challengeMessage  String              @map("challenge_message")
+  signature         String?             // User's signature
+  publicKey         String              @map("public_key")
+  expiresAt         DateTime            @map("expires_at")
+  isCompleted       Boolean             @default(false) @map("is_completed")
+  isSuccessful      Boolean?            @map("is_successful")
+  attempts          Int                 @default(0)
+  maxAttempts       Int                 @default(3)
+  ipAddress         String?             @map("ip_address")
+  userAgent         String?             @map("user_agent")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  completedAt       DateTime?           @map("completed_at")
+
+  @@index([walletIdentityId])
+  @@index([isCompleted])
+  @@index([expiresAt])
+  @@map("wallet_verification_challenges")
+}
+
+model AccountRecoveryMethod {
+  id                String              @id @default(cuid())
+  userId            String              @map("user_id")
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  method            VerificationMethod
+  identifier        String              // Email, phone, or recovery address
+  isVerified        Boolean             @default(false) @map("is_verified")
+  isPrimary         Boolean             @default(false) @map("is_primary")
+  lastUsedAt        DateTime?           @map("last_used_at")
+  verificationData  Json?               @map("verification_data")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  recoveryAttempts  AccountRecoveryAttempt[]
+
+  @@unique([userId, method, identifier])
+  @@index([userId])
+  @@index([method])
+  @@index([isPrimary])
+  @@map("account_recovery_methods")
+}
+
+model AccountRecoveryAttempt {
+  id                    String                  @id @default(cuid())
+  recoveryMethodId      String                  @map("recovery_method_id")
+  recoveryMethod        AccountRecoveryMethod   @relation(fields: [recoveryMethodId], references: [id], onDelete: Cascade)
+  sessionId             String                  @map("session_id") // Recovery session ID
+  challenge             String                  // Recovery challenge
+  response              String?                 // User's response
+  status                String                  @default("pending") // pending, successful, failed, expired
+  expiresAt             DateTime                @map("expires_at")
+  ipAddress             String?                 @map("ip_address")
+  userAgent             String?                 @map("user_agent")
+  metadata              Json?                   // Additional recovery data
+  createdAt             DateTime                @default(now()) @map("created_at")
+  completedAt           DateTime?               @map("completed_at")
+
+  @@index([recoveryMethodId])
+  @@index([sessionId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("account_recovery_attempts")
+}
+
+model IdentityPrivacySettings {
+  id                String       @id @default(cuid())
+  userId            String       @unique @map("user_id")
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Privacy settings for each identity type
+  showEmail         Boolean      @default(false) @map("show_email")
+  showWallets       Boolean      @default(false) @map("show_wallets")
+  showSocialProfiles Boolean      @default(false) @map("show_social_profiles")
+  showRealName      Boolean      @default(false) @map("show_real_name")
+  
+  // Provider-specific visibility
+  googleVisibility   PrivacyLevel @default(PRIVATE) @map("google_visibility")
+  facebookVisibility PrivacyLevel @default(PRIVATE) @map("facebook_visibility")
+  twitterVisibility  PrivacyLevel @default(PRIVATE) @map("twitter_visibility")
+  githubVisibility   PrivacyLevel @default(PRIVATE) @map("github_visibility")
+  
+  // Wallet visibility
+  stellarVisibility  PrivacyLevel @default(PRIVATE) @map("stellar_visibility")
+  ethereumVisibility PrivacyLevel @default(PRIVATE) @map("ethereum_visibility")
+  solanaVisibility   PrivacyLevel @default(PRIVATE) @map("solana_visibility")
+  
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  @@map("identity_privacy_settings")
+}
+
+model SsoSession {
+  id                String      @id @default(cuid())
+  userId            String      @map("user_id")
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId         String      @unique @map("session_id")
+  accessToken       String      @map("access_token")
+  refreshToken      String?     @map("refresh_token")
+  expiresAt         DateTime    @map("expires_at")
+  lastActivityAt    DateTime    @default(now()) @map("last_activity_at")
+  ipAddress         String?     @map("ip_address")
+  userAgent         String?     @map("user_agent")
+  isActive          Boolean     @default(true) @map("is_active")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([expiresAt])
+  @@index([isActive])
+  @@map("sso_sessions")
 }
