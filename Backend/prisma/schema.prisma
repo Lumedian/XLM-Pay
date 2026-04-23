@@ -37,6 +37,7 @@ model User {
   sybilProfile         SybilProfile?
   disputesFiled        ReputationDispute[]     @relation("Disputer")
   disputesAgainst      ReputationDispute[]     @relation("Disputed")
+  ammBots             AmmBot[]
 
   @@map("users")
 }
@@ -437,4 +438,175 @@ model SybilProfile {
   createdAt       DateTime @default(now()) @map("created_at")
 
   @@map("sybil_profiles")
+}
+
+// ----------------------------------------------------
+// AMM Bot Framework Models
+// ----------------------------------------------------
+
+enum StrategyType {
+  CONSTANT_PRODUCT
+  CONCENTRATED_LIQUIDITY
+  DYNAMIC_FEES
+}
+
+enum DexType {
+  UNISWAP_V3
+  CURVE
+  BALANCER
+}
+
+enum BotStatus {
+  ACTIVE
+  PAUSED
+  STOPPED
+  ERROR
+}
+
+model AmmBot {
+  id              String     @id @default(cuid())
+  userId          String     @map("user_id")
+  user            User       @relation(fields: [userId], references: [id])
+  name            String
+  strategyType    StrategyType @map("strategy_type")
+  strategyConfig  Json       @map("strategy_config")
+  riskParameters  Json       @map("risk_parameters")
+  status          BotStatus  @default(STOPPED)
+  totalValueLocked Decimal   @default(0) @map("total_value_locked")
+  feeRevenue      Decimal    @default(0) @map("fee_revenue")
+  impermanentLoss Decimal    @default(0) @map("impermanent_loss")
+  netProfit       Decimal    @default(0) @map("net_profit")
+  apr             Float      @default(0)
+  lastRebalanceAt DateTime?  @map("last_rebalance_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  positions       LiquidityPosition[]
+  rebalanceSignals RebalanceSignal[]
+  performanceSnapshots PerformanceSnapshot[]
+  feeRevenueRecords FeeRevenueRecord[]
+  ilHistory       ImpermanentLossHistory[]
+
+  @@map("amm_bots")
+}
+
+model LiquidityPosition {
+  id           String   @id @default(cuid())
+  botId        String   @map("bot_id")
+  bot          AmmBot   @relation(fields: [botId], references: [id])
+  token0       String   @map("token_0")
+  token1       String   @map("token_1")
+  amount0      Decimal  @map("amount_0")
+  amount1      Decimal  @map("amount_1")
+  poolAddress  String   @map("pool_address")
+  dexType      DexType  @map("dex_type")
+  tickLower    Int?     @map("tick_lower")
+  tickUpper    Int?     @map("tick_upper")
+  feeTier      Int?     @map("fee_tier")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("liquidity_positions")
+}
+
+model RebalanceSignal {
+  id             String        @id @default(cuid())
+  botId          String        @map("bot_id")
+  bot            AmmBot        @relation(fields: [botId], references: [id])
+  positionId     String        @map("position_id")
+  signalType     String        @map("signal_type") // ADD_LIQUIDITY, REMOVE_LIQUIDITY, ADJUST_RANGE
+  amount0        Decimal?      @map("amount_0")
+  amount1        Decimal?      @map("amount_1")
+  newTickLower   Int?          @map("new_tick_lower")
+  newTickUpper   Int?          @map("new_tick_upper")
+  reason         String
+  executed       Boolean       @default(false)
+  executedAt     DateTime?     @map("executed_at")
+  transactionHash String?      @map("transaction_hash")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@map("rebalance_signals")
+}
+
+model PerformanceSnapshot {
+  id              String   @id @default(cuid())
+  botId           String   @map("bot_id")
+  bot             AmmBot   @relation(fields: [botId], references: [id])
+  totalValueLocked Decimal  @map("total_value_locked")
+  feeRevenue      Decimal  @map("fee_revenue")
+  impermanentLoss Decimal  @map("impermanent_loss")
+  netProfit       Decimal  @map("net_profit")
+  apr             Float
+  volume24h       Decimal  @map("volume_24h")
+  timestamp       DateTime @default(now())
+
+  @@index([botId, timestamp])
+  @@map("performance_snapshots")
+}
+
+model FeeRevenueRecord {
+  id            String   @id @default(cuid())
+  botId         String   @map("bot_id")
+  bot           AmmBot   @relation(fields: [botId], references: [id])
+  positionId    String   @map("position_id")
+  amount0       Decimal  @map("amount_0")
+  amount1       Decimal  @map("amount_1")
+  usdValue      Decimal  @map("usd_value")
+  source        String   // DEX name
+  timestamp     DateTime @default(now())
+
+  @@index([botId, timestamp])
+  @@map("fee_revenue_records")
+}
+
+model ImpermanentLossHistory {
+  id                       String   @id @default(cuid())
+  botId                    String   @map("bot_id")
+  bot                      AmmBot   @relation(fields: [botId], references: [id])
+  positionId               String   @map("position_id")
+  initialPrice             Decimal  @map("initial_price")
+  currentPrice             Decimal  @map("current_price")
+  priceRatio               Decimal  @map("price_ratio")
+  ilPercentage             Decimal  @map("il_percentage")
+  ilAmount                 Decimal  @map("il_amount")
+  hodlValue                Decimal  @map("hodl_value")
+  liquidityValue           Decimal  @map("liquidity_value")
+  timestamp                DateTime @default(now())
+
+  @@index([botId, timestamp])
+  @@map("impermanent_loss_history")
+}
+
+model DexPoolData {
+  id            String   @id @default(cuid())
+  token0        String   @map("token_0")
+  token1        String   @map("token_1")
+  dexType       DexType  @map("dex_type")
+  poolAddress   String   @map("pool_address")
+  fee           Int
+  liquidity     Decimal
+  volume24h     Decimal  @map("volume_24h")
+  fee24h        Decimal  @map("fee_24h")
+  sqrtPriceX96  String?  @map("sqrt_price_x96")
+  tick          Int?
+  tickSpacing   Int?     @map("tick_spacing")
+  lastUpdated   DateTime @default(now()) @map("last_updated")
+
+  @@unique([token0, token1, dexType])
+  @@index([dexType])
+  @@map("dex_pool_data")
+}
+
+model BotAlert {
+  id        String      @id @default(cuid())
+  botId     String      @map("bot_id")
+  alertType String      @map("alert_type") // WARNING, ERROR, INFO
+  message   String
+  read      Boolean     @default(false)
+  timestamp DateTime    @default(now())
+
+  @@index([botId, timestamp])
+  @@map("bot_alerts")
 }

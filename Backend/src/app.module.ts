@@ -18,6 +18,7 @@ import { LoggingMiddleware } from './common/middleware/logging.middleware';
 import { AppLogger } from './common/logger/app.logger';
 import { AppCacheModule } from './cache/cache.module';
 import { NlpModule } from './nlp/nlp.module';
+import { AmmBotModule } from './amm-bot/amm-bot.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { NlpModule } from './nlp/nlp.module';
     AnalyticsModule,
     AppCacheModule,
     NlpModule,
+    AmmBotModule,
   ],
   controllers: [AppController, UserController],
   providers: [AppService, AppLogger],
