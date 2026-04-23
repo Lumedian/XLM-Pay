@@ -610,3 +610,245 @@ model BotAlert {
   @@index([botId, timestamp])
   @@map("bot_alerts")
 }
+
+// ----------------------------------------------------
+// Regulatory Change Management System Models
+// ----------------------------------------------------
+
+enum RegulatorySource {
+  SEC
+  CFTC
+  FINCEN
+  FATF
+  ESMA
+  FCA
+  MAS
+  HKMA
+  JFSA
+  OTHER
+}
+
+enum ChangeType {
+  NEW_REGULATION
+  AMENDMENT
+  REPEAL
+  GUIDANCE
+  ENFORCEMENT
+  POLICY_UPDATE
+}
+
+enum ImpactLevel {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  MINIMAL
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+  CANCELLED
+}
+
+enum TaskPriority {
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ComplianceArea {
+  KYC
+  AML
+  REPORTING
+  LICENSING
+  PRIVACY
+  DATA_PROTECTION
+  CAPITAL_REQUIREMENTS
+  RISK_MANAGEMENT
+  CONSUMER_PROTECTION
+  MARKET_INTEGRITY
+}
+
+model RegulatoryChange {
+  id                String           @id @default(cuid())
+  title             String
+  summary           String
+  content           String
+  source            RegulatorySource
+  sourceUrl         String?          @map("source_url")
+  changeType        ChangeType        @map("change_type")
+  publicationDate   DateTime         @map("publication_date")
+  effectiveDate     DateTime?        @map("effective_date")
+  relevanceScore    Float            @default(0) @map("relevance_score")
+  impactLevel       ImpactLevel?     @map("impact_level")
+  jurisdictions     Json             // Array of jurisdiction codes
+  complianceAreas   Json             // Array of ComplianceArea
+  aiTags            Json?            // AI-generated tags
+  isProcessed       Boolean          @default(false) @map("is_processed")
+  isAssessed        Boolean          @default(false) @map("is_assessed")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  impactAssessments ImpactAssessment[]
+  complianceTasks   ComplianceTask[]
+  auditEntries      AuditTrailEntry[]
+  policyUpdates     PolicyUpdate[]
+
+  @@index([source, publicationDate])
+  @@index([relevanceScore])
+  @@index([isProcessed, isAssessed])
+  @@map("regulatory_changes")
+}
+
+model ImpactAssessment {
+  id                  String       @id @default(cuid())
+  regulatoryChangeId  String       @map("regulatory_change_id")
+  regulatoryChange    RegulatoryChange @relation(fields: [regulatoryChangeId], references: [id])
+  assessorId          String       @map("assessor_id")
+  assessorName        String       @map("assessor_name")
+  impactLevel         ImpactLevel  @map("impact_level")
+  impactSummary       String       @map("impact_summary")
+  affectedOperations  Json         @map("affected_operations")
+  requiredActions     Json         @map("required_actions")
+  estimatedCost       Decimal?     @map("estimated_cost")
+  estimatedTimeline   Int?         @map("estimated_timeline") // days
+  riskFactors         Json         @map("risk_factors")
+  recommendations     Json         @map("recommendations")
+  status              String       @default("PENDING")
+  approvedBy          String?      @map("approved_by")
+  approvedAt          DateTime?    @map("approved_at")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  @@index([regulatoryChangeId])
+  @@index([assessorId])
+  @@map("impact_assessments")
+}
+
+model ComplianceTask {
+  id                  String         @id @default(cuid())
+  regulatoryChangeId  String         @map("regulatory_change_id")
+  regulatoryChange    RegulatoryChange @relation(fields: [regulatoryChangeId], references: [id])
+  title               String
+  description         String
+  complianceArea      ComplianceArea @map("compliance_area")
+  assignedTo          String?        @map("assigned_to")
+  assignedToName      String?        @map("assigned_to_name")
+  status              TaskStatus     @default(PENDING)
+  priority            TaskPriority   @default(MEDIUM)
+  dueDate             DateTime?      @map("due_date")
+  completedAt         DateTime?      @map("completed_at")
+  estimatedHours      Float?         @map("estimated_hours")
+  actualHours         Float?         @map("actual_hours")
+  dependencies        Json?          @map("dependencies") // Array of task IDs
+  checklist           Json?          @map("checklist")
+  notes               Json?          @map("notes")
+  attachments         Json?          @map("attachments")
+  createdBy           String         @map("created_by")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  @@index([regulatoryChangeId])
+  @@index([assignedTo, status])
+  @@index([dueDate, status])
+  @@index([complianceArea])
+  @@map("compliance_tasks")
+}
+
+model PolicyUpdate {
+  id                  String           @id @default(cuid())
+  regulatoryChangeId  String           @map("regulatory_change_id")
+  regulatoryChange    RegulatoryChange @relation(fields: [regulatoryChangeId], references: [id])
+  policyName          String           @map("policy_name")
+  policyType          String           @map("policy_type")
+  oldContent          String?          @map("old_content")
+  newContent          String           @map("new_content")
+  changeSummary       String           @map("change_summary")
+  updateType          String           @map("update_type") // CREATE, UPDATE, DELETE
+  autoGenerated       Boolean          @default(false) @map("auto_generated")
+  reviewedBy          String?          @map("reviewed_by")
+  approvedBy          String?          @map("approved_by")
+  status              String           @default("PENDING")
+  effectiveDate       DateTime?        @map("effective_date")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  @@index([regulatoryChangeId])
+  @@index([policyName])
+  @@index([status])
+  @@map("policy_updates")
+}
+
+model AuditTrailEntry {
+  id                  String           @id @default(cuid())
+  regulatoryChangeId  String           @map("regulatory_change_id")
+  regulatoryChange    RegulatoryChange @relation(fields: [regulatoryChangeId], references: [id])
+  action              String           // CREATED, UPDATED, ASSESSED, TASK_ASSIGNED, etc.
+  actorId             String           @map("actor_id")
+  actorName           String           @map("actor_name")
+  actorRole           String           @map("actor_role")
+  details             Json             // Action details
+  previousState       Json?            @map("previous_state")
+  newState            Json?            @map("new_state")
+  ipAddress           String?          @map("ip_address")
+  userAgent           String?          @map("user_agent")
+  timestamp           DateTime         @default(now())
+
+  @@index([regulatoryChangeId])
+  @@index([actorId])
+  @@index([timestamp])
+  @@map("audit_trail_entries")
+}
+
+model ComplianceTeam {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  role        String
+  department  String
+  expertise   Json     // Array of ComplianceArea
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("compliance_team")
+}
+
+model RegulatorySubscription {
+  id                String           @id @default(cuid())
+  name              String
+  source            RegulatorySource
+  feedUrl           String           @map("feed_url")
+  apiKey            String?          @map("api_key")
+  isActive          Boolean          @default(true) @map("is_active")
+  lastFetchedAt     DateTime?        @map("last_fetched_at")
+  fetchFrequency    Int              @default(3600) @map("fetch_frequency") // seconds
+  filters           Json?            // Filtering criteria
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@index([source, isActive])
+  @@map("regulatory_subscriptions")
+}
+
+model ComplianceTemplate {
+  id              String           @id @default(cuid())
+  name            String
+  description     String
+  complianceArea  ComplianceArea   @map("compliance_area")
+  templateType    String           @map("template_type") // TASK_TEMPLATE, POLICY_TEMPLATE, ASSESSMENT_TEMPLATE
+  content         Json             // Template structure
+  variables       Json?            // Template variables
+  isActive        Boolean          @default(true) @map("is_active")
+  createdBy       String           @map("created_by")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@index([complianceArea, templateType])
+  @@map("compliance_templates")
+}

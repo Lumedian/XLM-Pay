@@ -19,6 +19,7 @@ import { AppLogger } from './common/logger/app.logger';
 import { AppCacheModule } from './cache/cache.module';
 import { NlpModule } from './nlp/nlp.module';
 import { AmmBotModule } from './amm-bot/amm-bot.module';
+import { RegulatoryModule } from './regulatory/regulatory.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { AmmBotModule } from './amm-bot/amm-bot.module';
     AppCacheModule,
     NlpModule,
     AmmBotModule,
+    RegulatoryModule,
   ],
   controllers: [AppController, UserController],
   providers: [AppService, AppLogger],
