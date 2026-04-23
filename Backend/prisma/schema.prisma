@@ -16,6 +16,7 @@ model User {
   profileData     Json?    @map("profile_data")
   reputationScore Int      @default(0) @map("reputation_score")
   trustScore      Int      @default(500) @map("trust_score")
+  reputationLevel String   @default("BRONZE") @map("reputation_level")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
@@ -27,8 +28,25 @@ model User {
   createdProjects      Project[]            @relation("ProjectCreator")
   contributions        Contribution[]
   reputationHistory    ReputationHistory[]
+  reputationActivities ReputationActivity[] @relation("ReputationSubject")
+  triggeredActivities  ReputationActivity[] @relation("ReputationActor")
+  reputationBreakdown  ReputationScore?
   notificationSettings NotificationSetting?
   notifications        Notification[]
+  
+  // Invoice Factoring Relations
+  soldInvoices         Invoice[]            @relation("InvoiceSeller")
+  bids                 Bid[]                @relation("BidInvestor")
+  defaultClaims        DefaultClaim[]       @relation("DefaultClaimant")
+  accountingIntegration AccountingIntegration? @relation("AccountingUser")
+  competitionParticipants CompetitionParticipant[]
+  competitionLeaderboard CompetitionLeaderboard[]
+  competitionAchievements CompetitionAchievement[]
+  antiCheatFlags      AntiCheatFlag[]
+  prizeDistributions  PrizeDistribution[]
+
+  // Insurance Relations
+  insurancePolicies    InsurancePolicy[]
 
   @@map("users")
 }
@@ -52,6 +70,7 @@ model Project {
   // Relations
   contributions Contribution[]
   milestones    Milestone[]
+  publicGoodsProject PublicGoodsProject?
 
   @@map("projects")
 }
@@ -75,6 +94,7 @@ model Milestone {
   id             String          @id @default(cuid())
   projectId      String          @map("project_id")
   project        Project         @relation(fields: [projectId], references: [id])
+  contractMilestoneId String?    @map("contract_milestone_id")
   title          String
   description    String?
   fundingAmount  BigInt          @map("funding_amount")
@@ -83,6 +103,8 @@ model Milestone {
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
 
+  @@unique([projectId, contractMilestoneId])
+  @@index([projectId, contractMilestoneId])
   @@map("milestones")
 }
 
@@ -97,6 +119,78 @@ model ReputationHistory {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("reputation_history")
+}
+
+model ReputationActivity {
+  id           String       @id @default(cuid())
+  subjectId    String       @map("subject_id")
+  subject      User         @relation("ReputationSubject", fields: [subjectId], references: [id])
+  actorId      String?      @map("actor_id")
+  actor        User?        @relation("ReputationActor", fields: [actorId], references: [id])
+  activityType ActivityType @map("activity_type")
+  value        Decimal      @db.Decimal(18, 4)
+  referenceId  String?      @map("reference_id")
+  occurredAt   DateTime     @map("occurred_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  @@index([subjectId])
+  @@index([subjectId, activityType])
+  @@index([occurredAt])
+  @@map("reputation_activities")
+}
+
+model ReputationScore {
+  id                     String   @id @default(cuid())
+  subjectId              String   @unique @map("subject_id")
+  subject                User     @relation(fields: [subjectId], references: [id])
+  compositeScore         Decimal  @map("composite_score") @db.Decimal(6, 2)
+  successRateScore       Decimal  @map("success_rate_score") @db.Decimal(6, 2)
+  peerRatingScore        Decimal  @map("peer_rating_score") @db.Decimal(6, 2)
+  contributionSizeScore  Decimal  @map("contribution_size_score") @db.Decimal(6, 2)
+  communityFeedbackScore Decimal  @map("community_feedback_score") @db.Decimal(6, 2)
+  reliabilityScore       Decimal  @default(50) @map("reliability_score") @db.Decimal(6, 2)
+  expertiseScore         Decimal  @default(0) @map("expertise_score") @db.Decimal(6, 2)
+  communityScore         Decimal  @default(50) @map("community_score") @db.Decimal(6, 2)
+  activityCount          Int      @map("activity_count")
+  lowConfidence          Boolean  @default(false) @map("low_confidence")
+  calculatedAt           DateTime @updatedAt @map("calculated_at")
+
+  @@map("reputation_scores")
+}
+
+model ReputationDecayHistory {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  previousScore   Int      @map("previous_score")
+  newScore        Int      @map("new_score")
+  scoreChange     Int      @map("score_change")
+  decayFactor     Decimal  @map("decay_factor") @db.Decimal(6, 4)
+  activitiesCount Int      @map("activities_count")
+  exempted        Boolean  @default(false)
+  reason          String
+  occurredAt      DateTime @default(now()) @map("occurred_at")
+
+  @@index([userId])
+  @@index([occurredAt])
+  @@map("reputation_decay_history")
+}
+
+enum ActivityType {
+  SUCCESSFUL_TRANSACTION
+  FAILED_TRANSACTION
+  PEER_RATING
+  COMMUNITY_REVIEW
+  DISPUTE_WON
+  DISPUTE_LOST
+  HIGH_VALUE_CONTRIBUTION
+  PROJECT_COMPLETION
+  MILESTONE_ACHIEVEMENT
+  SOCIAL_INTERACTION
+  HELPFUL_COMMENT
+  MILESTONE_COMPLETED
+  MILESTONE_DELAYED
+  EXPERT_ENDORSEMENT
+  GOVERNANCE_VOTE
 }
 
 model Category {
@@ -208,6 +302,28 @@ model EmailOutbox {
   @@map("email_outbox")
 }
 
+model NotificationOutbox {
+  id             String              @id @default(cuid())
+  notificationId String?             @map("notification_id")
+  userId         String              @map("user_id")
+  channel        NotificationChannel
+  status         DeliveryStatus      @default(PENDING)
+  dedupKey       String              @unique @map("dedup_key")
+  payload        Json
+  attempts       Int                 @default(0)
+  maxAttempts    Int                 @default(3) @map("max_attempts")
+  nextRetryAt    DateTime            @default(now()) @map("next_retry_at")
+  lastAttemptAt  DateTime?           @map("last_attempt_at")
+  retryDisabled  Boolean             @default(false) @map("retry_disabled")
+  lastError      String?             @map("last_error")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  @@index([status, nextRetryAt])
+  @@index([userId, channel])
+  @@map("notification_outbox")
+}
+
 enum NotificationType {
   CONTRIBUTION
   MILESTONE
@@ -221,12 +337,31 @@ enum EmailStatus {
   FAILED
 }
 
+enum NotificationChannel {
+  EMAIL
+  PUSH
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 // Insurance Module Models
 
 enum RiskType {
   PROJECT_FAILURE
   SMART_CONTRACT_EXPLOIT
   MARKET_VOLATILITY
+  PARAMETRIC_WEATHER
+}
+
+enum PolicyStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  CLAIMED
 }
 
 enum ClaimStatus {
@@ -239,11 +374,17 @@ enum ClaimStatus {
 model InsurancePolicy {
   id             String    @id @default(cuid())
   userId         String    @map("user_id")
+  user           User      @relation(fields: [userId], references: [id])
   poolId         String    @map("pool_id")
+  pool           InsurancePool @relation(fields: [poolId], references: [id])
   riskType       RiskType  @map("risk_type")
   premium        Decimal   @map("premium")
   coverageAmount Decimal   @map("coverage_amount")
+  status         PolicyStatus @default(ACTIVE)
   createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  claims         Claim[]
 
   @@map("insurance_policies")
 }
@@ -254,6 +395,11 @@ model InsurancePool {
   capital       Decimal  @default(0)
   lockedCapital Decimal  @default(0) @map("locked_capital")
   createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  insurancePolicies    InsurancePolicy[]
+  reinsuranceContracts ReinsuranceContract[]
+  claims               Claim[]
 
   @@map("insurance_pools")
 }
@@ -261,6 +407,9 @@ model InsurancePool {
 model Claim {
   id           String      @id @default(cuid())
   policyId     String      @map("policy_id")
+  policy       InsurancePolicy @relation(fields: [policyId], references: [id])
+  poolId       String?     @map("pool_id")
+  pool         InsurancePool? @relation(fields: [poolId], references: [id])
   claimAmount  Decimal     @map("claim_amount")
   status       ClaimStatus @default(PENDING)
   payoutAmount Decimal?    @map("payout_amount")
@@ -272,6 +421,7 @@ model Claim {
 model ReinsuranceContract {
   id             String   @id @default(cuid())
   poolId         String   @map("pool_id")
+  pool           InsurancePool @relation(fields: [poolId], references: [id])
   coverageLimit  Decimal  @map("coverage_limit")
   premiumRate    Decimal  @map("premium_rate")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -279,55 +429,5 @@ model ReinsuranceContract {
   @@map("reinsurance_contracts")
 }
 
-// Privacy Analytics Models
 
-model PrivacyBudget {
-  id             String   @id @default(cuid())
-  userId         String   @unique @map("user_id")
-  totalBudget    Float    @default(1.0) @map("total_budget")
-  usedBudget     Float    @default(0.0) @map("used_budget")
-  lastReset      DateTime @default(now()) @map("last_reset")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  queries        PrivacyBudgetQuery[]
-
-  @@map("privacy_budgets")
-}
-
-model PrivacyBudgetQuery {
-  id           String    @id @default(cuid())
-  budgetId     String    @map("budget_id")
-  budget       PrivacyBudget @relation(fields: [budgetId], references: [id])
-  queryId      String    @unique @map("query_id")
-  epsilon      Float
-  description  String?
-  status       QueryStatus @default(COMPLETED)
-  timestamp    DateTime  @default(now())
-  createdAt    DateTime  @default(now()) @map("created_at")
-
-  @@map("privacy_budget_queries")
-}
-
-model AnalyticsCache {
-  id           String   @id @default(cuid())
-  cacheKey     String   @unique @map("cache_key")
-  queryType    String   @map("query_type")
-  parameters   Json     // Query parameters
-  result       Json     // Differential privacy result
-  epsilon      Float
-  timestamp    DateTime @default(now())
-  expiresAt    DateTime @map("expires_at")
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  @@index([cacheKey])
-  @@index([expiresAt])
-  @@map("analytics_cache")
-}
-
-enum QueryStatus {
-  COMPLETED
-  RESERVED
-  FAILED
 }

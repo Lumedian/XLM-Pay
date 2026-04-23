@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationController } from './notification.controller';
 import { PrismaService } from '../prisma.service';
+import { EmailRetryTask } from './tasks/email-retry.task';
 
 describe('NotificationController', () => {
   let controller: NotificationController;
@@ -18,6 +19,12 @@ describe('NotificationController', () => {
             user: {
               update: jest.fn(),
             },
+          },
+        },
+        {
+          provide: EmailRetryTask,
+          useValue: {
+            getRetryDashboard: jest.fn(),
           },
         },
       ],
