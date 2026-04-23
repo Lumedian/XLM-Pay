@@ -1,13 +1,14 @@
- main
+
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
-import { UserController } from './user.controller';
 import { AppService } from './app.service';
 import { validateEnv } from './config/env.validation';
 
 
+
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -19,23 +20,30 @@ import { validateEnv } from './config/env.validation';
       useFactory: (config: ConfigService) => ({
         throttlers: [
           {
-            ttl: 60000, // 1 minute
-            limit: 100, // 100 requests per minute per IP
+            ttl: 60000,
+            limit: 100,
           },
         ],
       }),
     }),
+    PrismaModule,
     ReputationModule,
     DatabaseModule,
 
   ],
-  controllers: [AppController, UserController],
-  providers: [AppService, AppLogger],
+  controllers: [AppController],
+  providers: [AppService, AppLogger, ApiVersionMiddleware, TimeoutMiddleware],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer
-      .apply(CorrelationIdMiddleware, LoggingMiddleware)
+      .apply(
+        CorrelationIdMiddleware,
+        LoggingMiddleware,
+        ApiVersionMiddleware,
+        TimeoutMiddleware,
+        SanitizationMiddleware,
+      )
       .forRoutes('*');
   }
 }
