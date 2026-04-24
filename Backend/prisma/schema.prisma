@@ -50,6 +50,7 @@ model User {
   tenantMembers       TenantMember[]
   experimentAssignments ExperimentAssignment[]
   verificationSessions VerificationSession[]
+  crossChainSwaps      CrossChainSwap[]
 
 
   @@unique([tenantId, email])
@@ -901,20 +902,22 @@ model ConfigEntry {
 }
 
 model FeatureFlag {
-  id         String   @id @default(uuid())
-  key        String
-  enabled    Boolean  @default(false)
-  tenantId   String?  @map("tenant_id")
-  rolloutPct Int      @default(100) @map("rollout_pct")
-  metadata   Json?
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  enabled     Boolean  @default(false)
+  tenantId    String?  @map("tenant_id")
+  rolloutPct  Int      @default(100) @map("rollout_pct")
+  rules       Json?    // For user-targeted flags (e.g., { "userIds": ["..."], "roles": ["..."] })
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  @@unique([key, tenantId])
-  @@index([key])
+  @@index([name])
   @@index([tenantId])
   @@map("feature_flags")
 }
+
 
 model Experiment {
   id              String      @id @default(uuid())
@@ -1500,19 +1503,38 @@ enum DocumentType {
 }
 
 
-model FeatureFlag {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  enabled     Boolean  @default(false)
-  rules       Json?    // For user-targeted flags (e.g., { "userIds": ["..."], "roles": ["..."] })
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  @@map("feature_flags")
+
+model CrossChainSwap {
+  id                 String     @id @default(cuid())
+  userId             String     @map("user_id")
+  user               User       @relation(fields: [userId], references: [id])
+  amount             String
+  sourceChain        String     @map("source_chain")
+  destinationChain   String     @map("destination_chain")
+  destinationAddress String     @map("destination_address")
+  hashLock           String     @map("hash_lock")
+  secret             String?
+  status             SwapStatus @default(PENDING)
+  timeoutAt          DateTime   @map("timeout_at")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([hashLock])
+  @@map("cross_chain_swaps")
+}
+
+enum SwapStatus {
+  PENDING
+  COMMITTED
+  CLAIMED
+  REFUNDED
+  EXPIRED
 }
 
 model FeatureFlagAnalytics {
+
   id        String   @id @default(cuid())
   flagName  String   @map("flag_name")
   userId    String?  @map("user_id")

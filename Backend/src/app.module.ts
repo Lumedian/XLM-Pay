@@ -3,7 +3,6 @@ import { ExperimentsModule } from './experiments/experiments.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { KycModule } from './kyc/kyc.module';
 
-
 import { AdminModule } from './admin/admin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -22,7 +21,6 @@ import { IndexAnalysisModule } from './index-analysis/index-analysis.module';
 import { LifecycleModule } from './lifecycle/lifecycle.module';
 import { LoggingModule } from './logging/logging.module';
 import { Module } from '@nestjs/common';
-import { PaymentModule } from './payment/payment.module';
 import { FraudModule } from './fraud/fraud.module';
 import { PrismaModule } from './prisma.module';
 import { QuotaModule } from './quota/quota.module';
@@ -33,12 +31,11 @@ import { ReputationModule } from './reputation/reputation.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SessionModule } from './sessions/session.module';
 import { TenantModule } from './tenant/tenant.module';
-import { ThrottlerModule } from '@nestjs/throttler';
-import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { UserController } from './user.controller';
 import { WebhooksModule } from './webhooks/webhooks.module';
-import { WebsocketModule } from './websocket/websocket.module';
 import { validateEnv } from './config/env.validation';
+import { CollateralModule } from './collateral/collateral.module';
+import { GeolocationModule } from './geolocation/geolocation.module';
 
 import { SupportModule } from './support/support.module';
 import { MultisigModule } from './multisig/multisig.module';
@@ -63,7 +60,7 @@ import { TransactionQueueModule } from './transaction-queue/transaction-queue.mo
 import { LiquidityAggregationModule } from './liquidity-aggregation/liquidity-aggregation.module';
 import { FeatureFlagModule } from './feature-flags/feature-flag.module';
 import { BulkModule } from './bulk/bulk.module';
-
+import { CrossChainSwapModule } from './cross-chain-swap/cross-chain-swap.module';
 
 
 
@@ -148,6 +145,7 @@ import { BulkModule } from './bulk/bulk.module';
     LiquidityAggregationModule,
     FeatureFlagModule,
     BulkModule,
+    CrossChainSwapModule,
   ],
   controllers: [AppController, UserController, DocsController],
   providers: [AppService],
