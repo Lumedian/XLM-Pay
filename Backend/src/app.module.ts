@@ -26,6 +26,7 @@ import { RefreshToken } from './auth/entities/refresh-token.entity';
 import { ApiToken } from './auth/entities/api-token.entity';
 import { AuditModule } from './audit/audit.module';
 import { AuditLog } from './audit/audit.entity';
+import { DatabaseHealthIndicator } from './database/database-health.indicator';
 import { VoiceJob } from './voice/entities/voice-job.entity';
 import { ThrottleModule } from './throttle/throttle.module';
 
@@ -95,6 +96,7 @@ import { ThrottleModule } from './throttle/throttle.module';
 
   providers: [
     AppService,
+    DatabaseHealthIndicator,
 
     /**
      * Global RBAC enforcement
