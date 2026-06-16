@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { AiCacheService } from './cache/ai-cache.service';
 import { QuotaService } from './quota/quota.service';
 import { AiRequestDto } from './dto/ai-request.dto';
-import { AiProvider, AI_FALLBACK_PROVIDER } from './ai.provider';
+import type { AiProvider } from './ai.provider';
+import { AI_FALLBACK_PROVIDER } from './ai.provider';
 
 @Injectable()
 export class AiService {
