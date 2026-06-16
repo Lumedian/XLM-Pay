@@ -25,7 +25,6 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
   server: Server;
 
   private readonly logger = new Logger(VoiceGateway.name);
-  private readonly userSessions = new Map<string, string>(); // userId -> sessionId
 
   constructor(
     private readonly voiceSessionService: VoiceSessionService,
@@ -49,7 +48,8 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
         await this.voiceSessionService.resumeSession(sessionId);
 
         client.join(sessionId);
-        this.userSessions.set(userId, sessionId);
+        // AC-1: restore the Redis-backed active-session pointer on reconnect
+        await this.voiceSessionService.setUserActiveSession(userId, sessionId);
 
         client.emit('voice:resumed', { sessionId, state: session.state });
         this.logger.log(
@@ -71,12 +71,15 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
 
     if (userId && sessionId) {
-      // Don't terminate session immediately - allow for reconnection
+      // Don't terminate session immediately — allow for reconnection.
+      // The Redis TTL on the active-session pointer will expire naturally (10 min)
+      // and the cron job will clean up truly stale sessions.
       await this.voiceSessionService.updateSessionState(
         sessionId,
         ConversationState.IDLE,
       );
-      this.userSessions.delete(userId);
+      // AC-1: remove the active-session pointer so other instances know the socket is gone
+      await this.voiceSessionService.deleteUserActiveSession(userId);
     }
   }
 
@@ -102,23 +105,40 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
           client.id,
         );
         client.join(existingSession.id);
-        this.userSessions.set(userId, existingSession.id);
+        // AC-1: keep the Redis pointer in sync
+        await this.voiceSessionService.setUserActiveSession(
+          userId,
+          existingSession.id,
+        );
 
         client.emit('voice:session-created', { session: existingSession });
         return;
       }
 
-      // Create new session
-      const session = await this.voiceSessionService.createSession(
-        createSessionDto.userId,
-        createSessionDto.context,
-        createSessionDto.walletAddress,
-        createSessionDto.metadata,
-      );
+      // Create new session — throws if the per-user limit is hit (AC-4)
+      let session;
+      try {
+        session = await this.voiceSessionService.createSession(
+          createSessionDto.userId,
+          createSessionDto.context,
+          createSessionDto.walletAddress,
+          createSessionDto.metadata,
+        );
+      } catch (err: any) {
+        if (err.message?.includes('Session limit reached')) {
+          client.emit('voice:error', {
+            code: 'SESSION_LIMIT_REACHED',
+            message: err.message,
+          });
+          return;
+        }
+        throw err;
+      }
 
       await this.voiceSessionService.updateSessionSocket(session.id, client.id);
       client.join(session.id);
-      this.userSessions.set(userId, session.id);
+      // AC-1: store the active-session pointer in Redis
+      await this.voiceSessionService.setUserActiveSession(userId, session.id);
 
       client.emit('voice:session-created', { session });
       this.logger.log(`Created voice session ${session.id} for user ${userId}`);
@@ -135,7 +155,9 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const userId = client.handshake.auth.userId;
-      const sessionId = this.userSessions.get(userId);
+      // AC-1: resolve the session via Redis instead of the in-memory Map
+      const sessionId =
+        await this.voiceSessionService.getUserActiveSession(userId);
 
       if (!sessionId) {
         client.emit('voice:error', { message: 'No active session' });
@@ -172,7 +194,9 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const userId = client.handshake.auth.userId;
-      const sessionId = this.userSessions.get(userId);
+      // AC-1: resolve the session via Redis
+      const sessionId =
+        await this.voiceSessionService.getUserActiveSession(userId);
 
       if (!sessionId) {
         client.emit('voice:error', { message: 'No active session' });
@@ -206,7 +230,9 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const userId = client.handshake.auth.userId;
-      const sessionId = this.userSessions.get(userId);
+      // AC-1: resolve the session via Redis
+      const sessionId =
+        await this.voiceSessionService.getUserActiveSession(userId);
 
       if (!sessionId) {
         client.emit('voice:error', { message: 'No active session' });
@@ -245,7 +271,9 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleTerminate(@ConnectedSocket() client: Socket) {
     try {
       const userId = client.handshake.auth.userId;
-      const sessionId = this.userSessions.get(userId);
+      // AC-1: resolve the session via Redis
+      const sessionId =
+        await this.voiceSessionService.getUserActiveSession(userId);
 
       if (!sessionId) {
         client.emit('voice:error', { message: 'No active session' });
@@ -258,13 +286,15 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
         sessionId,
       );
 
-      // Terminate session
+      // Terminate session (also clears the active-session pointer)
       const success =
         await this.voiceSessionService.terminateSession(sessionId);
 
       if (success) {
         client.leave(sessionId);
-        this.userSessions.delete(userId);
+        // AC-1: explicit pointer removal (terminateSession also handles this,
+        // but we remove here for defence-in-depth)
+        await this.voiceSessionService.deleteUserActiveSession(userId);
         client.emit('voice:terminated', { sessionId });
         this.logger.log(
           `Terminated voice session ${sessionId} for user ${userId}`,
@@ -281,11 +311,16 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('voice:ping')
   async handlePing(@ConnectedSocket() client: Socket) {
     const userId = client.handshake.auth.userId;
-    const sessionId = this.userSessions.get(userId);
+    // AC-1: resolve the session via Redis
+    const sessionId =
+      await this.voiceSessionService.getUserActiveSession(userId);
 
     if (sessionId) {
-      // Update session last activity
+      // Update session last activity and heartbeat timestamp (AC-2)
       await this.voiceSessionService.updateSessionSocket(sessionId, client.id);
+      await this.voiceSessionService.updateLastPingAt(sessionId);
+      // AC-1: refresh the 10-minute TTL on the active-session pointer
+      await this.voiceSessionService.refreshUserSessionTTL(userId);
     }
 
     client.emit('voice:pong', { timestamp: Date.now() });

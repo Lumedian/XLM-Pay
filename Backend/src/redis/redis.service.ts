@@ -28,4 +28,34 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.subClient.quit(),
     ]);
   }
+
+  /**
+   * Cursor-based key scan — safe to use in production (does not block Redis).
+   * Returns all keys matching the given glob pattern.
+   */
+  async scanKeys(pattern: string): Promise<string[]> {
+    const keys: string[] = [];
+    let cursor = '0';
+
+    do {
+      const reply = await this.client.scan(cursor, {
+        MATCH: pattern,
+        COUNT: 100,
+      });
+      cursor = reply.cursor;
+      keys.push(...reply.keys);
+    } while (cursor !== '0');
+
+    return keys;
+  }
+
+  /**
+   * Refresh the TTL of an existing key without changing its value.
+   * Returns true if the key exists and the TTL was updated.
+   */
+  async refreshTTL(key: string, ttlSeconds: number): Promise<boolean> {
+    const result = await this.client.expire(key, ttlSeconds);
+    return result === 1;
+  }
 }
+

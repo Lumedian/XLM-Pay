@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 
 import { AppController } from './app.controller';
@@ -8,12 +9,12 @@ import { AppService } from './app.service';
 
 import { RedisModule } from './redis/redis.module';
 import { VoiceModule } from './voice/voice.module';
-// DatabaseModule removed - using PostgreSQL config in this module instead
 import { StellarMonitorModule } from './stellar-monitor/stellar-monitor.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { QueueModule } from './queue/queue.module';
 import { AuthModule } from './auth/auth.module';
 import { MarketDataModule } from './market-data/market-data.module';
+import { AiModule } from './ai/ai.module';
 
 import { RolesGuard } from './guards/roles.guard';
 import { ConfigValidationService } from './config/config-validation.service';
@@ -35,6 +36,8 @@ import { ThrottleModule } from './throttle/throttle.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+
+    ScheduleModule.forRoot(),
 
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -71,6 +74,7 @@ import { ThrottleModule } from './throttle/throttle.module';
     MarketDataModule,
     AuditModule,
     ThrottleModule,
+    AiModule,
   ],
 
   controllers: [AppController],

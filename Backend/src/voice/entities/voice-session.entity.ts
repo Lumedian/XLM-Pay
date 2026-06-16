@@ -19,6 +19,8 @@ export interface VoiceSession {
   messages: VoiceMessage[];
   createdAt: Date;
   lastActivityAt: Date;
+  /** Timestamp of the last voice:ping received; used for heartbeat timeout detection */
+  lastPingAt?: Date;
   ttl: number; // Time to live in seconds
   socketId?: string;
   metadata?: Record<string, any>;

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { VoiceGateway } from './voice.gateway';
-import { VoiceSessionService } from './services/voice-session.service';
+import { VoiceSessionService, MAX_SESSIONS_PER_USER } from './services/voice-session.service';
 import { StreamingResponseService } from './services/streaming-response.service';
 import { Server, Socket } from 'socket.io';
 import { FeatureContext } from './types/feature-context.enum';
@@ -41,6 +41,13 @@ describe('VoiceGateway', () => {
     getUserActiveSessions: jest.fn(),
     terminateSession: jest.fn(),
     addMessage: jest.fn(),
+    // AC-1: Redis-backed active-session pointer
+    setUserActiveSession: jest.fn(),
+    getUserActiveSession: jest.fn(),
+    deleteUserActiveSession: jest.fn(),
+    refreshUserSessionTTL: jest.fn(),
+    // AC-2: heartbeat
+    updateLastPingAt: jest.fn(),
   };
 
   const mockStreamingResponseService = {
@@ -81,7 +88,7 @@ describe('VoiceGateway', () => {
   });
 
   describe('handleConnection', () => {
-    it('should resume existing session on connection', async () => {
+    it('should resume existing session on connection and set Redis pointer', async () => {
       const mockSession = {
         id: 'session123',
         userId: 'user123',
@@ -91,6 +98,7 @@ describe('VoiceGateway', () => {
       mockVoiceSessionService.getSession.mockResolvedValue(mockSession);
       mockVoiceSessionService.updateSessionSocket.mockResolvedValue(true);
       mockVoiceSessionService.resumeSession.mockResolvedValue(true);
+      mockVoiceSessionService.setUserActiveSession.mockResolvedValue(undefined);
 
       await gateway.handleConnection(mockClient as any);
 
@@ -100,6 +108,11 @@ describe('VoiceGateway', () => {
       expect(mockVoiceSessionService.updateSessionSocket).toHaveBeenCalledWith(
         'session123',
         'client123',
+      );
+      // AC-1: Redis pointer must be set on reconnect
+      expect(mockVoiceSessionService.setUserActiveSession).toHaveBeenCalledWith(
+        'user123',
+        'session123',
       );
       expect(mockClient.join).toHaveBeenCalledWith('session123');
       expect(mockClient.emit).toHaveBeenCalledWith('voice:resumed', {
@@ -136,6 +149,7 @@ describe('VoiceGateway', () => {
       };
       mockVoiceSessionService.createSession.mockResolvedValue(mockSession);
       mockVoiceSessionService.updateSessionSocket.mockResolvedValue(true);
+      mockVoiceSessionService.setUserActiveSession.mockResolvedValue(undefined);
 
       await gateway.createSession(mockClient as any, createSessionDto);
 
@@ -146,6 +160,11 @@ describe('VoiceGateway', () => {
         undefined,
       );
       expect(mockClient.join).toHaveBeenCalledWith('newSession123');
+      // AC-1: Redis pointer stored after new session creation
+      expect(mockVoiceSessionService.setUserActiveSession).toHaveBeenCalledWith(
+        'user123',
+        'newSession123',
+      );
       expect(mockClient.emit).toHaveBeenCalledWith('voice:session-created', {
         session: mockSession,
       });
@@ -167,6 +186,7 @@ describe('VoiceGateway', () => {
         existingSession,
       ]);
       mockVoiceSessionService.updateSessionSocket.mockResolvedValue(true);
+      mockVoiceSessionService.setUserActiveSession.mockResolvedValue(undefined);
 
       await gateway.createSession(mockClient as any, createSessionDto);
 
@@ -176,11 +196,34 @@ describe('VoiceGateway', () => {
         session: existingSession,
       });
     });
+
+    // AC-4: session limit enforcement
+    it('should emit SESSION_LIMIT_REACHED error when session cap is hit', async () => {
+      const createSessionDto = {
+        userId: 'user123',
+        context: FeatureContext.GENERAL,
+      };
+
+      // No existing sessions in getUserActiveSessions (gateway checks this first)
+      mockVoiceSessionService.getUserActiveSessions.mockResolvedValue([]);
+      // createSession itself throws when the limit is reached
+      mockVoiceSessionService.createSession.mockRejectedValue(
+        new Error('Session limit reached: users may have at most 3 concurrent sessions'),
+      );
+
+      await gateway.createSession(mockClient as any, createSessionDto);
+
+      expect(mockClient.emit).toHaveBeenCalledWith('voice:error', {
+        code: 'SESSION_LIMIT_REACHED',
+        message: expect.stringContaining('Session limit reached'),
+      });
+    });
   });
 
   describe('handleMessage', () => {
     beforeEach(() => {
-      gateway['userSessions'].set('user123', 'session123');
+      // AC-1: gateway now resolves session via Redis
+      mockVoiceSessionService.getUserActiveSession.mockResolvedValue('session123');
     });
 
     it('should start streaming response for valid message', async () => {
@@ -203,7 +246,7 @@ describe('VoiceGateway', () => {
     });
 
     it('should return error for user with no active session', async () => {
-      gateway['userSessions'].delete('user123');
+      mockVoiceSessionService.getUserActiveSession.mockResolvedValue(null);
       const messageDto = { content: 'Hello AI' };
 
       await gateway.handleMessage(mockClient as any, messageDto);
@@ -219,7 +262,7 @@ describe('VoiceGateway', () => {
 
   describe('handleInterrupt', () => {
     beforeEach(() => {
-      gateway['userSessions'].set('user123', 'session123');
+      mockVoiceSessionService.getUserActiveSession.mockResolvedValue('session123');
     });
 
     it('should interrupt streaming response', async () => {
@@ -253,12 +296,13 @@ describe('VoiceGateway', () => {
 
   describe('handleTerminate', () => {
     beforeEach(() => {
-      gateway['userSessions'].set('user123', 'session123');
+      mockVoiceSessionService.getUserActiveSession.mockResolvedValue('session123');
     });
 
-    it('should terminate session successfully', async () => {
+    it('should terminate session successfully and clear Redis pointer', async () => {
       mockStreamingResponseService.interruptStream.mockResolvedValue(true);
       mockVoiceSessionService.terminateSession.mockResolvedValue(true);
+      mockVoiceSessionService.deleteUserActiveSession.mockResolvedValue(undefined);
 
       await gateway.handleTerminate(mockClient as any);
 
@@ -269,6 +313,10 @@ describe('VoiceGateway', () => {
       expect(mockVoiceSessionService.terminateSession).toHaveBeenCalledWith(
         'session123',
       );
+      // AC-1: pointer must be cleared on termination
+      expect(mockVoiceSessionService.deleteUserActiveSession).toHaveBeenCalledWith(
+        'user123',
+      );
       expect(mockClient.leave).toHaveBeenCalledWith('session123');
       expect(mockClient.emit).toHaveBeenCalledWith('voice:terminated', {
         sessionId: 'session123',
@@ -277,6 +325,7 @@ describe('VoiceGateway', () => {
 
     it('should return error when termination fails', async () => {
       mockVoiceSessionService.terminateSession.mockResolvedValue(false);
+      mockStreamingResponseService.interruptStream.mockResolvedValue(false);
 
       await gateway.handleTerminate(mockClient as any);
 
@@ -288,11 +337,13 @@ describe('VoiceGateway', () => {
 
   describe('handlePing', () => {
     beforeEach(() => {
-      gateway['userSessions'].set('user123', 'session123');
+      mockVoiceSessionService.getUserActiveSession.mockResolvedValue('session123');
     });
 
-    it('should update session activity and respond with pong', async () => {
+    it('should update session socket, heartbeat timestamp and refresh TTL, then pong', async () => {
       mockVoiceSessionService.updateSessionSocket.mockResolvedValue(true);
+      mockVoiceSessionService.updateLastPingAt.mockResolvedValue(true);
+      mockVoiceSessionService.refreshUserSessionTTL.mockResolvedValue(undefined);
 
       await gateway.handlePing(mockClient as any);
 
@@ -300,6 +351,26 @@ describe('VoiceGateway', () => {
         'session123',
         'client123',
       );
+      // AC-2: heartbeat timestamp updated on every ping
+      expect(mockVoiceSessionService.updateLastPingAt).toHaveBeenCalledWith(
+        'session123',
+      );
+      // AC-1: TTL on the active-session pointer refreshed
+      expect(mockVoiceSessionService.refreshUserSessionTTL).toHaveBeenCalledWith(
+        'user123',
+      );
+      expect(mockClient.emit).toHaveBeenCalledWith('voice:pong', {
+        timestamp: expect.any(Number),
+      });
+    });
+
+    it('should still send pong even when there is no active session', async () => {
+      mockVoiceSessionService.getUserActiveSession.mockResolvedValue(null);
+
+      await gateway.handlePing(mockClient as any);
+
+      expect(mockVoiceSessionService.updateSessionSocket).not.toHaveBeenCalled();
+      expect(mockVoiceSessionService.updateLastPingAt).not.toHaveBeenCalled();
       expect(mockClient.emit).toHaveBeenCalledWith('voice:pong', {
         timestamp: expect.any(Number),
       });
