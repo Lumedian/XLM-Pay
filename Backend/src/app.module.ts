@@ -16,6 +16,7 @@ import { AuthModule } from './auth/auth.module';
 import { MarketDataModule } from './market-data/market-data.module';
 
 import { RolesGuard } from './guards/roles.guard';
+import { ConfigValidationService } from './config/config-validation.service';
 
 import { Workflow } from './workflow/entities/workflow.entity';
 import { WorkflowStep } from './workflow/entities/workflow-step.entity';
@@ -43,7 +44,7 @@ import { ThrottleModule } from './throttle/throttle.module';
         host: configService.get('DB_HOST') || 'localhost',
         port: configService.get('DB_PORT') || 5432,
         username: configService.get('DB_USERNAME') || 'postgres',
-        password: configService.get('DB_PASSWORD') || 'password',
+        password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_DATABASE') || 'stellara_workflows',
         entities: [
           Workflow,
@@ -76,6 +77,7 @@ import { ThrottleModule } from './throttle/throttle.module';
 
   providers: [
     AppService,
+    ConfigValidationService,
 
     /**
      * Global RBAC enforcement

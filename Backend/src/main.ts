@@ -4,9 +4,14 @@ import { RedisIoAdapter } from './websocket/redis-io.adapter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { ThrottleGuard } from './throttle/throttle.guard';
+import { ConfigValidationService } from './config/config-validation.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Validate configuration at startup
+  const configValidationService = app.get(ConfigValidationService);
+  configValidationService.validate();
 
   // Enable validation globally
   app.useGlobalPipes(
