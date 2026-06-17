@@ -12,12 +12,13 @@ pub struct NonceManager;
 
 impl NonceManager {
     const NONCE_LIST_KEY: Symbol = symbol_short!("_nonces");
+    const CHAIN_KEY: Symbol = symbol_short!("_chain");
 
     pub fn record_and_verify(env: &Env, chain_id: u32, nonce: u64) -> Result<(), ()> {
         let required_chain: Option<u32> = env
             .storage()
             .persistent()
-            .get(&symbol_short!("_chain"))
+            .get(&Self::CHAIN_KEY)
             .unwrap_or(None);
 
         if let Some(expected) = required_chain {
@@ -32,25 +33,13 @@ impl NonceManager {
             .get(&Self::NONCE_LIST_KEY)
             .unwrap_or_else(|| Vec::new(env));
 
-        for i in 0..nonces.len() {
-            let record = nonces.get_unchecked(i);
-            if record.chain_id == chain_id && record.nonce == nonce {
-                if record.used {
-                    panic!("REPLAY_DETECTED");
-                }
-            }
-        }
-
-        let new_record = NonceRecord {
-            chain_id,
-            nonce,
-            used: true,
-        };
-
         let mut found = false;
         for i in 0..nonces.len() {
             let mut record = nonces.get_unchecked(i);
             if record.chain_id == chain_id && record.nonce == nonce {
+                if record.used {
+                    panic!("REPLAY_DETECTED");
+                }
                 record.used = true;
                 nonces.set(i, record);
                 found = true;
@@ -59,6 +48,11 @@ impl NonceManager {
         }
 
         if !found {
+            let new_record = NonceRecord {
+                chain_id,
+                nonce,
+                used: true,
+            };
             nonces.push_back(new_record);
         }
 
@@ -69,7 +63,7 @@ impl NonceManager {
     }
 
     pub fn set_chain_id(env: &Env, chain_id: u32) {
-        env.storage().persistent().set(&symbol_short!("_chain"), &chain_id);
+        env.storage().persistent().set(&Self::CHAIN_KEY, &chain_id);
     }
 
     pub fn get_last_nonce(env: &Env, chain_id: u32) -> Option<u64> {

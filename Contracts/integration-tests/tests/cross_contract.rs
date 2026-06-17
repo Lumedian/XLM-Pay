@@ -6,13 +6,16 @@ use academy_rewards::AcademyRewardsContract;
 use messaging::UpgradeableMessagingContract;
 use shared::circuit_breaker::CircuitBreakerConfig;
 use shared::governance::ProposalStatus;
+use shared::nonce::NonceManager;
+use shared::reentrancy_guard::ReentrancyGuard;
 use social_rewards::SocialRewardsContract;
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
     testutils::{Address as _, Ledger},
-    token, Address, Env, String, Vec,
+    token, Address, Bytes, Env, String, Vec,
 };
 use trading::UpgradeableTradingContract;
+use cross_chain_router::{CrossChainRouter, bridge::StellaraBridge};
 
 #[contract]
 pub struct MockTokenContract;
@@ -95,7 +98,6 @@ fn test_academy_rewards_trigger_social_rewards() {
     let discount = academy.redeem_badge(&user, &String::from_str(&env, "tx-1"));
     assert_eq!(discount, 500);
 
-    // Integration behavior: a successful badge redemption triggers social reward crediting.
     social.add_reward(&user, &(discount as i128));
 
     let record = academy.get_redemption_history(&user, &0u32).unwrap();
@@ -268,4 +270,202 @@ fn test_shared_governance_module_across_contracts() {
 
     assert_eq!(trade_status, ProposalStatus::Approved);
     assert_eq!(msg_status, ProposalStatus::Approved);
+}
+
+#[test]
+fn test_replay_message_on_messaging_rejected() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let messaging_id = env.register_contract(None, UpgradeableMessagingContract);
+    let messaging = messaging::UpgradeableMessagingContractClient::new(&env, &messaging_id);
+
+    let admin = Address::generate(&env);
+    let approver = Address::generate(&env);
+    let executor = Address::generate(&env);
+
+    let mut approvers = Vec::new(&env);
+    approvers.push_back(approver.clone());
+
+    let cb_config = CircuitBreakerConfig {
+        max_volume_per_period: 10_000_000,
+        max_tx_count_per_period: 100,
+        period_duration: 3600,
+    };
+
+    messaging.init(&admin, &approvers, &executor, &cb_config);
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    let payload = String::from_str(&env, "adversarial replay");
+
+    let first = messaging.send_message(&alice, &bob, &payload);
+    assert_eq!(first, 1);
+
+    let replay = messaging.try_send_message(&alice, &bob, &payload);
+    assert!(replay.is_err());
+}
+
+#[test]
+fn test_cross_chain_replay_rejected() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let router_id = env.register_contract(None, CrossChainRouter);
+    let router = cross_chain_router::CrossChainRouterClient::new(&env, &router_id);
+
+    let admin = Address::generate(&env);
+    router.init(&admin);
+
+    let sender = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let payload = Bytes::from_array(&env, &[7u8; 32]);
+    let message_id = router.initiate_message(&0, &1, &sender, &recipient, &payload);
+
+    let header = cross_chain_router::LightClientHeader {
+        block_number: 1,
+        block_hash: BytesN::from_array(&env, &[1u8; 32]),
+        timestamp: 1000,
+        commitment_root: BytesN::from_array(&env, &[2u8; 32]),
+    };
+
+    let proof = Bytes::from_array(&env, &[3u8; 32]);
+    router.verify_message(&message_id, &header, &proof);
+
+    let replay = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        router.verify_message(&message_id, &header, &proof);
+    }));
+    assert!(replay.is_err(), "Replay should be rejected");
+}
+
+#[test]
+fn test_reentrancy_guard_blocks_internal_reentry() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let router_id = env.register_contract(None, CrossChainRouter);
+    let router = cross_chain_router::CrossChainRouterClient::new(&env, &router_id);
+
+    let admin = Address::generate(&env);
+    router.init(&admin);
+
+    let validator = Address::generate(&env);
+
+    ReentrancyGuard::enter(&env);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        router.register_validator(&validator, &1_000_000_000i128);
+    }));
+    assert!(result.is_err(), "Reentrancy should be blocked");
+    ReentrancyGuard::exit(&env);
+}
+
+#[test]
+fn test_messaging_replay_rejected() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let messaging_id = env.register_contract(None, UpgradeableMessagingContract);
+    let messaging = messaging::UpgradeableMessagingContractClient::new(&env, &messaging_id);
+
+    let admin = Address::generate(&env);
+    let approver = Address::generate(&env);
+    let executor = Address::generate(&env);
+
+    let mut approvers = Vec::new(&env);
+    approvers.push_back(approver.clone());
+
+    let cb_config = CircuitBreakerConfig {
+        max_volume_per_period: 10_000_000,
+        max_tx_count_per_period: 100,
+        period_duration: 3600,
+    };
+
+    messaging.init(&admin, &approvers, &executor, &cb_config);
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    let payload = String::from_str(&env, "integration replay");
+
+    let first = messaging.send_message(&alice, &bob, &payload);
+    assert_eq!(first, 1);
+
+    let second = messaging.try_send_message(&alice, &bob, &payload);
+    assert!(second.is_err(), "Replay should be rejected");
+}
+
+#[test]
+fn test_bridge_withdraw_replay_protection() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let bridge_id = env.register_contract(None, StellaraBridge);
+    let bridge = cross_chain_router::bridge::StellaraBridgeClient::new(&env, &bridge_id);
+
+    let admin = Address::generate(&env);
+    let fee_collector = Address::generate(&env);
+    bridge.initialize(&admin, &fee_collector, &2u32, &1u32);
+
+    let validator = Address::generate(&env);
+    bridge.add_validator(&validator);
+
+    let to = Address::generate(&env);
+    let asset = Address::generate(&env);
+    let amount = 1000i128;
+    let nonce = 1u64;
+
+    let mut data = Bytes::new(&env);
+    data.append(&to.clone().to_xdr(&env));
+    data.append(&asset.clone().to_xdr(&env));
+    data.append(&amount.to_xdr(&env));
+    data.append(&(0u32).to_xdr(&env));
+    data.append(&nonce.to_xdr(&env));
+    let message_hash = env.crypto().sha256(&data);
+
+    let sig1 = BytesN::from_array(&env, &[1u8; 64]);
+    let sig2 = BytesN::from_array(&env, &[2u8; 64]);
+    let sigs = Vec::from_array(&env, [sig1, sig2]);
+
+    let first_withdraw = bridge.withdraw(&to, &asset, &amount, &0u32, &nonce, &sigs);
+    assert!(!first_withdraw.is_empty());
+
+    let replay = bridge.try_withdraw(&to, &asset, &amount, &0u32, &nonce, &sigs);
+    assert!(replay.is_err(), "Replay should be rejected");
+}
+
+#[test]
+fn test_nonce_enforces_sequential_order() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    env.mock_all_auths();
+
+    let router_id = env.register_contract(None, CrossChainRouter);
+    let router = cross_chain_router::CrossChainRouterClient::new(&env, &router_id);
+
+    let admin = Address::generate(&env);
+    router.set_chain_id(&admin, &1u32);
+
+    let sender = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let payload1 = Bytes::from_array(&env, &[8u8; 32]);
+    router.initiate_message(&1, &2, &sender, &recipient, &payload1);
+
+    let env2 = Env::default();
+    env2.mock_all_auths();
+    let router_id2 = env2.register_contract(None, CrossChainRouter);
+    let router2 = cross_chain_router::CrossChainRouterClient::new(&env2, &router_id2);
+
+    let admin2 = Address::generate(&env2);
+    router2.set_chain_id(&admin2, &1u32);
+
+    let sender2 = Address::generate(&env2);
+    let recipient2 = Address::generate(&env2);
+
+    let payload2 = Bytes::from_array(&env2, &[9u8; 32]);
+    router2.initiate_message(&1, &2, &sender2, &recipient2, &payload2);
 }
