@@ -3,6 +3,8 @@ use soroban_sdk::{
     Address, Env, Vec, Map, BytesN, Bytes, xdr::ToXdr
 };
 use shared::governance::{GovernanceRole};
+use shared::nonce::NonceManager;
+use shared::reentrancy_guard::ReentrancyGuard;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -60,6 +62,9 @@ impl StellaraBridge {
         let mut roles: Map<Address, GovernanceRole> = Map::new(&env);
         roles.set(admin, GovernanceRole::Admin);
         env.storage().persistent().set(&symbol_short!("roles"), &roles);
+
+        env.storage().persistent().set(&symbol_short!("initialized"), &true);
+        env.storage().persistent().set(&(symbol_short!("nonce"), 0u64), &0u64);
     }
 
     pub fn deposit(env: Env, from: Address, asset: Address, amount: i128, dest_chain: u32, recipient: Address) -> BytesN<32> {
