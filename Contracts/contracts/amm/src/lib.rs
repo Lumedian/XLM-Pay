@@ -365,6 +365,7 @@ impl AmmContract {
     ) -> Result<RemoveLiquidityResult, AmmError> {
         caller.require_auth();
         require_init(&env)?;
+        require_not_paused(&env)?;
 
         let mut pos = require_position(&env, position_id)?;
         if pos.owner != caller {
@@ -593,6 +594,7 @@ impl AmmContract {
         token_b: Address,
     ) -> Result<u32, AmmError> {
         require_init(&env)?;
+        require_not_paused(&env)?;
         let pool_key = PoolKey { token_a, token_b };
         let mut pool = require_pool(&env, &pool_key)?;
 

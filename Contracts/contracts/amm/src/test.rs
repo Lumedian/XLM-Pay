@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use shared::circuit_breaker::CircuitBreakerConfig;
+use shared::circuit_breaker::{CircuitBreaker, PauseLevel};
 use shared::governance::ProposalStatus;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -19,7 +20,7 @@ fn default_cb() -> CircuitBreakerConfig {
     }
 }
 
-fn setup(env: &Env) -> (AmmContractClient<'_>, Address, Address, Address) {
+fn setup_with_id(env: &Env) -> (Address, AmmContractClient<'_>, Address, Address, Address) {
     let id = env.register_contract(None, AmmContract);
     let client = AmmContractClient::new(env, &id);
     let admin = Address::generate(env);
@@ -27,6 +28,11 @@ fn setup(env: &Env) -> (AmmContractClient<'_>, Address, Address, Address) {
     let executor = Address::generate(env);
     env.mock_all_auths();
     client.init(&admin, &vec![env, approver.clone()], &executor, &default_cb());
+    (id, client, admin, approver, executor)
+}
+
+fn setup(env: &Env) -> (AmmContractClient<'_>, Address, Address, Address) {
+    let (_, client, admin, approver, executor) = setup_with_id(env);
     (client, admin, approver, executor)
 }
 
@@ -291,6 +297,55 @@ fn test_pause_blocks_add_liquidity() {
         &1_000_000i128, &1_000_000i128, &0i128, &0i128,
     );
     assert!(result.is_err());
+}
+
+#[test]
+fn test_full_pause_blocks_remove_liquidity_and_fee_update() {
+    let env = Env::default();
+    env.ledger().with_mut(|l| l.timestamp = 1000);
+    env.mock_all_auths();
+    let (client, admin, _, _) = setup(&env);
+    let (ta, tb) = make_pool(&env, &client, &admin);
+    let lp = Address::generate(&env);
+    mint(&env, &ta, &tb, &lp, 10_000_000);
+
+    let r = client.add_liquidity(
+        &lp, &ta, &tb, &-512i32, &512i32,
+        &1_000_000i128, &1_000_000i128, &0i128, &0i128,
+    );
+    client.pause(&admin);
+
+    assert!(client
+        .try_remove_liquidity(&lp, &r.position_id, &r.liquidity, &0i128, &0i128)
+        .is_err());
+    assert!(client.try_update_dynamic_fee(&ta, &tb).is_err());
+}
+
+#[test]
+fn test_partial_pause_keeps_unpaused_state_changes_available() {
+    let env = Env::default();
+    env.ledger().with_mut(|l| l.timestamp = 1000);
+    env.mock_all_auths();
+    let (id, client, admin, _, _) = setup_with_id(&env);
+    let (ta, tb) = make_pool(&env, &client, &admin);
+    let lp = Address::generate(&env);
+    mint(&env, &ta, &tb, &lp, 10_000_000);
+
+    env.as_contract(&id, || {
+        let mut cb_state = CircuitBreaker::get_state(&env);
+        cb_state.pause_level = PauseLevel::Partial;
+        env.storage()
+            .persistent()
+            .set(&soroban_sdk::symbol_short!("cb_state"), &cb_state);
+    });
+
+    let r = client.add_liquidity(
+        &lp, &ta, &tb, &-512i32, &512i32,
+        &1_000_000i128, &1_000_000i128, &0i128, &0i128,
+    );
+    let half = r.liquidity / 2;
+    client.remove_liquidity(&lp, &r.position_id, &half, &0i128, &0i128);
+    assert_eq!(client.update_dynamic_fee(&ta, &tb), 30);
 }
 
 #[test]
