@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "contracts/trading",
+    "contracts/staking-rewards",
     "contracts/social_rewards",
     "contracts/messaging",
     "contracts/academy",
@@ -10,6 +11,7 @@ members = [
     "contracts/tcr",
     "contracts/cross-chain-router",
     "contracts/amm",
+    "contracts/staking-rewards",
     "integration-tests",
     "shared",
     "contracts/upgradeability",
