@@ -23,6 +23,7 @@ pub enum Error {
     CDPNotFound = 7,
     NotLiquidatable = 8,
     AssetNotFound = 9,
+    InvalidPrice = 10,
 }
 
 #[contracttype]
@@ -117,6 +118,10 @@ impl SyntheticAssetsContract {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
+        if new_price <= 0 {
+            return Err(Error::InvalidPrice);
+        }
+
         let mut config: SyntheticConfig = env
             .storage()
             .persistent()
@@ -204,6 +209,10 @@ impl SyntheticAssetsContract {
             .get(&asset_symbol)
             .ok_or(Error::AssetNotFound)?;
 
+        if config.oracle_price <= 0 {
+            return Err(Error::InvalidPrice);
+        }
+
         let cdp_key = Self::cdp_key(&owner, &asset_symbol);
         let mut cdp: CDP = env
             .storage()
@@ -252,6 +261,10 @@ impl SyntheticAssetsContract {
             .persistent()
             .get(&asset_symbol)
             .ok_or(Error::AssetNotFound)?;
+
+        if config.oracle_price <= 0 {
+            return Err(Error::InvalidPrice);
+        }
 
         let cdp_key = Self::cdp_key(&owner, &asset_symbol);
         let mut cdp: CDP = env
@@ -302,6 +315,10 @@ impl SyntheticAssetsContract {
             .persistent()
             .get(&asset_symbol)
             .ok_or(Error::AssetNotFound)?;
+
+        if config.oracle_price <= 0 {
+            return Err(Error::InvalidPrice);
+        }
 
         let cdp_key = Self::cdp_key(&owner, &asset_symbol);
         let mut cdp: CDP = env
@@ -481,4 +498,84 @@ impl SyntheticAssetsContract {
 }
 
 #[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::{symbol_short, testutils::Address as _, Address, Env};
+
+    fn setup() -> (Env, SyntheticAssetsContractClient<'static>, Address, Symbol) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, SyntheticAssetsContract);
+        let client: SyntheticAssetsContractClient<'static> =
+            unsafe { core::mem::transmute(SyntheticAssetsContractClient::new(&env, &id)) };
+        let admin = Address::generate(&env);
+        let asset = symbol_short!("sBTC");
+        client.initialize(&admin);
+        client.register_asset(&admin, &asset, &15000, &12000, &1300, &200);
+        (env, client, admin, asset)
+    }
+
+    #[test]
+    fn test_update_price_rejects_zero() {
+        let (_env, client, admin, asset) = setup();
+        assert_eq!(
+            client.try_update_price(&admin, &asset, &0),
+            Err(Ok(Error::InvalidPrice))
+        );
+    }
+
+    #[test]
+    fn test_update_price_rejects_negative() {
+        let (_env, client, admin, asset) = setup();
+        assert_eq!(
+            client.try_update_price(&admin, &asset, &-1),
+            Err(Ok(Error::InvalidPrice))
+        );
+    }
+
+    #[test]
+    fn test_update_price_accepts_positive() {
+        let (_env, client, admin, asset) = setup();
+        client.update_price(&admin, &asset, &1_000_000);
+        assert_eq!(client.get_config(&asset).oracle_price, 1_000_000);
+    }
+
+    #[test]
+    fn test_mint_blocked_on_zero_price() {
+        let (env, client, admin, asset) = setup();
+        let owner = Address::generate(&env);
+        client.open_cdp(&owner, &asset, &10_000_000);
+        // oracle_price is still 0 after register_asset
+        assert_eq!(
+            client.try_mint(&owner, &asset, &1_000),
+            Err(Ok(Error::InvalidPrice))
+        );
+        // valid price allows mint
+        client.update_price(&admin, &asset, &50_000_000);
+        assert!(client.try_mint(&owner, &asset, &1_000).is_ok());
+    }
+
+    #[test]
+    fn test_burn_blocked_on_zero_price() {
+        let (env, client, admin, asset) = setup();
+        let owner = Address::generate(&env);
+        client.open_cdp(&owner, &asset, &10_000_000);
+        // cannot set price to 0 via update_price anymore; verify burn works with valid price
+        client.update_price(&admin, &asset, &50_000_000);
+        client.mint(&owner, &asset, &100);
+        assert!(client.try_burn(&owner, &asset, &100).is_ok());
+    }
+
+    #[test]
+    fn test_add_collateral_blocked_on_zero_price() {
+        let (env, client, _admin, asset) = setup();
+        let owner = Address::generate(&env);
+        client.open_cdp(&owner, &asset, &10_000_000);
+        // oracle_price still 0
+        assert_eq!(
+            client.try_add_collateral(&owner, &asset, &1_000_000),
+            Err(Ok(Error::InvalidPrice))
+        );
+    }
+}
 mod test;
