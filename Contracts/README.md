@@ -1,317 +1,228 @@
-📜 Stellara AI Smart Contracts (Soroban)
+# XLMPay Contract
 
-Soroban smart contracts powering Stellara AI, a Web3 crypto learning and social trading platform built on the Stellar blockchain. These contracts provide decentralized services for education credentials, social rewards, messaging, and on-chain trading used by the Stellara backend and frontend applications.
+The Soroban smart contract that is the actual source of truth for XLMPay. This is where every payment authorization is stored, every limit is enforced, and every pull either succeeds or fails — not in the [`frontend/`](../frontend) and not in the [`backend/`](../backend).
 
-This repository is intended for blockchain developers, protocol contributors, and the Stellara platform infrastructure, serving as the trust layer for learning achievements, engagement rewards, user interactions, and decentralized trading features.
-
-## 🆕 Upgradeability & Governance
-
-**NEW**: All contracts now feature explicit upgradeability with on-chain governance support.
-
-✅ **Multi-Signature Approval**: Upgrades require M-of-N approvals (e.g., 2-of-3)  
-✅ **Timelock Delays**: Prevents immediate execution (configurable: 1-24+ hours)  
-✅ **Role-Based Control**: Admin, Approver, and Executor roles prevent single points of failure  
-✅ **Transparent Governance**: All proposals tracked on-chain and auditable  
-✅ **Comprehensive Tests**: 10+ test cases covering all upgrade scenarios  
-
-**Documentation**:
-- [Upgradeability Design](./UPGRADEABILITY.md) - Complete architecture & security analysis
-- [Governance User Guide](./GOVERNANCE_GUIDE.md) - Step-by-step upgrade procedures
-- [Quick Reference](./QUICK_REFERENCE.md) - 30-second overview
-- [Implementation Summary](../IMPLEMENTATION_SUMMARY.md) - What was built
-
-## Overview
-
-This repository contains four core smart contracts that power the Stellara ecosystem:
-
-- **Trading Contract** (✨ **Now Upgradeable**): Decentralized exchange functionality for trading cryptocurrency pairs
-- **Academy Contract**: Credential management for course completion and learning achievements
-- **Social Rewards Contract**: Engagement tracking and reward distribution for community participation
-- **Messaging Contract**: Decentralized messaging between users with read status tracking
-
-## Project Structure
-
-```
-├── contracts/
-│   ├── trading/         # ✨ Upgradeable DEX trading contract
-│   ├── academy/         # ✨ NEW: Academy vesting & rewards contract
-│   │   ├── VESTING_DESIGN.md           # Vesting architecture & design
-│   │   ├── VESTING_QUICK_REFERENCE.md  # Quick reference guide
-│   │   ├── INTEGRATION_GUIDE.md        # Backend/frontend integration
-│   │   ├── DELIVERY_SUMMARY.md         # Project completion summary
-│   │   └── README.md                   # Academy contract overview
-│   ├── social_rewards/  # Engagement rewards contract
-│   └── messaging/       # P2P messaging contract
-├── shared/              # ✨ NEW: Shared governance module (reusable)
-│   └── src/governance.rs # Multi-sig upgrade governance
-├── Cargo.toml          # Workspace configuration
-├── UPGRADEABILITY.md   # Upgradeability design documentation
-├── GOVERNANCE_GUIDE.md # Step-by-step governance procedures
-├── QUICK_REFERENCE.md  # Quick reference card
-└── README.md           # This file
-```
-
-## Prerequisites
-
-- Rust 1.70 or later
-- Soroban SDK 20.5.0
-- Stellar CLI tools
-
-## Building
-
-```bash
-# Build all contracts
-cargo build --release --target wasm32-unknown-unknown
-
-# Build specific contract
-cd contracts/trading
-cargo build --release --target wasm32-unknown-unknown
-```
-
-## Testing
-
-```bash
-# Run all tests (including new governance tests)
-cargo test --all
-
-# Run specific contract tests
-cd contracts/trading
-cargo test  # Includes 10+ upgradeability tests
-```
-
-## Governance & Upgradeability
-
-### Quick Start
-
-All contracts now support governance-controlled upgrades:
-
-```bash
-# 1. Initialize with governance roles
-stellar contract invoke --id $CONTRACT_ID --source admin -- \
-  init --admin $ADMIN --approvers [$A1,$A2,$A3] --executor $EXECUTOR
-
-# 2. Propose an upgrade
-stellar contract invoke --id $CONTRACT_ID --source admin -- \
-  propose_upgrade --new_contract_hash $HASH --description "..." \
-  --approvers [$A1,$A2,$A3] --approval_threshold 2 --timelock_delay 3600
-
-# 3. Approvers vote (need 2 of 3)
-stellar contract invoke --id $CONTRACT_ID --source $APPROVER1 -- \
-  approve_upgrade --proposal_id 1
-
-# 4. Wait for timelock, then execute
-stellar contract invoke --id $CONTRACT_ID --source $EXECUTOR -- \
-  execute_upgrade --proposal_id 1
-```
-
-### Governance Features
-
-- ✅ **Multi-Sig Approval** (M-of-N): e.g., 2-of-3 signers required
-- ✅ **Timelock Delays**: Safety period (1-24+ hours) before execution
-- ✅ **Role-Based Control**: Admin, Approver, Executor roles
-- ✅ **Transparent**: All proposals on-chain and queryable
-- ✅ **Circuit Breakers**: Rejection and cancellation mechanisms
-
-### Documentation
-
-- **[UPGRADEABILITY.md](./UPGRADEABILITY.md)**: 10+ sections covering:
-  - Architecture with diagrams
-  - Security safeguards explained
-  - Complete governance process flow
-  - Smart contract implementation details
-  - Testing & validation strategy
-  
-- **[GOVERNANCE_GUIDE.md](./GOVERNANCE_GUIDE.md)**: Practical guide with:
-  - Step-by-step CLI examples
-  - Multi-signature approval workflow
-  - Timelock management
-  - Error handling & troubleshooting
-  - Emergency procedures
-  
-- **[QUICK_REFERENCE.md](./QUICK_REFERENCE.md)**: Cheat sheet with:
-  - 30-second overview
-  - Function reference
-  - Common scenarios
-  - Error codes
-
-## Deployment
-
-### Testnet Deployment
-
-1. Set up your Stellar CLI:
-```bash
-stellar config network set testnet https://soroban-testnet.stellar.org
-```
-
-2. Create a network configuration:
-```bash
-stellar config set --scope global RPC_URL https://soroban-testnet.stellar.org
-stellar config set --scope global NETWORK_PASSPHRASE "Test SDF Network ; September 2015"
-```
-
-3. Deploy contracts:
-```bash
-# Build WASM binaries
-cargo build --release --target wasm32-unknown-unknown
-
-# Deploy trading contract
-stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/trading_contract.wasm \
-  --source account-name \
-  --network testnet
-```
-
-4. Initialize contracts after deployment:
-```bash
-# Initialize trading contract with governance
-stellar contract invoke \
-  --id CONTRACT_ADDRESS \
-  --source account-name \
-  --network testnet \
-  -- init \
-  --admin "$ADMIN_ADDRESS" \
-  --approvers '["$APPROVER1", "$APPROVER2", "$APPROVER3"]' \
-  --executor "$EXECUTOR_ADDRESS"
-```
-
-## Contract Descriptions
-
-### Trading Contract ✨ (Upgradeable)
-
-Manages decentralized trading operations with governance support.
-
-**Key Functions:**
-- `init()`: Initialize with governance roles
-- `trade()`: Execute a trade on specified pair with fee collection
-- `get_stats()`: Retrieve trading statistics
-- `propose_upgrade()`: Propose contract upgrade
-- `approve_upgrade()`: Approve pending upgrade
-- `execute_upgrade()`: Execute approved upgrade
-- `pause()` / `unpause()`: Emergency pause functionality
-
-**Governance Functions:**
-- `propose_upgrade()`: Create upgrade proposal (Admin)
-- `approve_upgrade()`: Approve proposal (Approver)
-- `reject_upgrade()`: Reject proposal (Approver)
-- `execute_upgrade()`: Execute approved upgrade (Executor)
-- `cancel_upgrade()`: Cancel proposal (Admin)
-
-### Academy Contract (✨ NEW: Vesting & Rewards)
-
-Manages educational credentials, achievements, and secure vesting of academy rewards.
-
-**Two Core Features:**
-
-1. **Vesting Module** (NEW) - Time-based vesting of tokens/badges
-   - `grant_vesting()`: Create vesting schedule (admin only)
-   - `claim()`: Atomic claim of vested tokens (single-claim semantics)
-   - `revoke()`: Revoke grant with timelock protection
-   - `get_vesting()`: Query vesting schedule
-   - `get_vested_amount()`: Calculate current vested amount
-
-2. **Credentials** - Educational achievements
-   - `issue_credential()`: Award credential to user (admin only)
-   - `get_user_credentials()`: Retrieve user's credentials
-   - `verify_credential()`: Verify a credential exists
-
-**Vesting Features:**
-- ✅ Time-based vesting with cliff periods
-- ✅ Linear vesting after cliff
-- ✅ Single-claim semantics (prevents double-spend)
-- ✅ Governance revocation with 1+ hour timelock
-- ✅ Event emission for off-chain indexing
-- ✅ 18+ comprehensive tests
-
-**Documentation:**
-- [VESTING_DESIGN.md](./contracts/academy/VESTING_DESIGN.md) - Complete technical design
-- [VESTING_QUICK_REFERENCE.md](./contracts/academy/VESTING_QUICK_REFERENCE.md) - Quick start
-- [INTEGRATION_GUIDE.md](./contracts/academy/INTEGRATION_GUIDE.md) - Integration examples
-- [README.md](./contracts/academy/README.md) - Academy contract overview
-
-### Social Rewards Contract
-
-Tracks engagement and distributes rewards.
-
-**Key Functions:**
-- `init()`: Initialize the contract
-- `record_engagement()`: Record user engagement activity
-- `get_user_rewards()`: Get user's reward balance and tier
-- `get_engagement_history()`: Get user's engagement history
-- `claim_tier_reward()`: Claim rewards based on tier
-
-### Messaging Contract
-
-Enables decentralized P2P messaging.
-
-**Key Functions:**
-- `init()`: Initialize the contract
-- `send_message()`: Send message to recipient
-- `mark_as_read()`: Mark message as read
-- `get_messages()`: Get user's messages (received/sent)
-- `get_unread_count()`: Get count of unread messages
-- `get_stats()`: Retrieve messaging statistics
-
-## Environment Variables
-
-For deployment, set these environment variables:
-
-```bash
-# Stellar account secret key
-export STELLAR_SECRET_KEY="your-secret-key"
-
-# Network configuration (testnet by default)
-export SOROBAN_NETWORK="testnet"
-export SOROBAN_RPC_URL="https://soroban-testnet.stellar.org"
-
-# Governance configuration
-export ADMIN_ADDRESS="G..."
-export APPROVER_1="G..."
-export APPROVER_2="G..."
-export APPROVER_3="G..."
-export EXECUTOR_ADDRESS="G..."
-```
-
-## Security Considerations
-
-- ✅ All contracts implement authentication via `require_auth()`
-- ✅ Admin functions protected with role verification
-- ✅ Contract storage uses instance storage for state management
-- ✅ **NEW**: Upgradeable via multi-sig governance (prevents rogue upgrades)
-- ✅ **NEW**: Timelock delays provide reaction window (1-24+ hours)
-- ✅ **NEW**: Transparent proposal system (all changes auditable)
-
-## Ecosystem Repositories
-
-🌐 **Frontend** (Next.js): https://github.com/Dev-shamoo/Stellara_Ai  
-⚙ **Backend** (NestJS): https://github.com/shamoo53/Stellara_Ai_backend  
-⭐ **Stellar Docs**: https://developers.stellar.org/docs/smart-contracts/soroban/  
-
-## Contributing
-
-🤝 Contributing:
-- Fork the repository
-- Create a feature branch
-- Submit a pull request
-
-Please ensure all tests pass and documentation is updated with your changes.
+If the frontend or backend disagree with what's on-chain, the chain is correct. Those two layers exist to make this contract easier to use; they have no authority of their own.
 
 ---
 
-**Last Updated**: January 22, 2026  
-**Version**: 2.0 (with Upgradeability & Governance)  
-**Status**: Production Ready
-Commit your changes
-git pull latest changes to avoid conflicts
-Submit a pull request 
-Issues and feature requests are welcome.
+# 🚀 What This Contract Does
 
-When adding new features:
+The contract manages a single core concept: a **payment authorization** — a payer's standing, bounded permission for a specific recipient to pull funds on a schedule.
 
-1. Create a new function in the appropriate contract
-2. Add corresponding tests
-3. Update this README with new function documentation
-4. Ensure all tests pass before submitting
+It is responsible for:
 
+* **Creating an authorization** — recorded only when signed by the payer themselves
+* **Enforcing limits on every pull** — amount cap, minimum interval since the last pull, expiry date / max pull count
+* **Executing a pull** — transferring funds directly from payer to recipient, only if all limits pass
+* **Revoking an authorization** — permanently, callable only by the payer, effective immediately
+* **Emitting events** for every state change (created, pulled, pull rejected, revoked) so the backend indexer and frontend can stay in sync without needing to trust each other
 
+The contract **never** custodies funds. Payer funds remain in the payer's account at all times; the contract only holds the authorization record and executes a transfer at pull time if — and only if — that pull is currently valid.
 
+---
 
+# 🧠 Core Concepts
+
+### Authorization
+
+The central data structure. An authorization defines:
+
+| Field | Description |
+|---|---|
+| `payer` | Address that owns the funds and signed the authorization |
+| `recipient` | Address allowed to call `pull()` against this authorization |
+| `asset` | The Stellar asset being paid (XLM or another Stellar asset contract) |
+| `max_amount` | Maximum amount that can be pulled in a single `pull()` call |
+| `min_interval` | Minimum time that must pass between consecutive successful pulls |
+| `expiry` | Timestamp (or max pull count) after which the authorization can no longer be used |
+| `status` | `active`, `expired`, or `revoked` |
+| `last_pull_at` | Timestamp of the most recent successful pull, used to enforce `min_interval` |
+
+### Pull
+
+A single execution attempt against an authorization. A `pull()` call:
+
+1. Loads the authorization by ID
+2. Checks `status == active`
+3. Checks `now >= last_pull_at + min_interval`
+4. Checks `now <= expiry` (or pull count `< max_pulls`)
+5. Checks requested amount `<= max_amount`
+6. If all checks pass: transfers funds payer → recipient, updates `last_pull_at`, emits a success event
+7. If any check fails: the call fails, no funds move, an event is emitted recording the rejection reason
+
+### Revocation
+
+Only the `payer` address on an authorization can revoke it. Revocation is immediate and permanent — there is currently no "pause and resume," only revoke-and-recreate. (See [roadmap](../README.md#-future-roadmap).)
+
+---
+
+# 📜 Public Interface
+
+> Exact function signatures will evolve during development — this reflects the intended interface as of this writing. Treat as a working draft, not a frozen spec, until version 1.0.
+
+```rust
+// Create a new payment authorization. Must be invoked with the payer's signature.
+pub fn create_authorization(
+    env: Env,
+    payer: Address,
+    recipient: Address,
+    asset: Address,
+    max_amount: i128,
+    min_interval: u64,
+    expiry: u64,
+) -> u64; // returns authorization ID
+
+// Attempt to pull funds under an existing authorization. Callable by the recipient.
+pub fn pull(
+    env: Env,
+    authorization_id: u64,
+    amount: i128,
+) -> bool; // true if pull succeeded, fails/panics with reason otherwise
+
+// Revoke an authorization. Must be invoked with the payer's signature.
+pub fn revoke(
+    env: Env,
+    authorization_id: u64,
+);
+
+// Read-only: fetch the current state of an authorization.
+pub fn get_authorization(
+    env: Env,
+    authorization_id: u64,
+) -> Authorization;
+```
+
+### Events emitted
+
+| Event | Emitted when |
+|---|---|
+| `AuthorizationCreated` | A new authorization is successfully created |
+| `PullSucceeded` | A `pull()` call passes all checks and funds transfer |
+| `PullRejected` | A `pull()` call fails a check (includes the rejection reason) |
+| `AuthorizationRevoked` | A payer revokes an authorization |
+
+These events are what the backend indexer listens to — they are the only way off-chain components should learn about state changes.
+
+---
+
+# 🔐 Authorization & Signing Rules
+
+These rules are the actual security boundary of the entire system. Everything else in this repo exists around them.
+
+* `create_authorization` **must** require the `payer`'s signature. A recipient cannot create or widen an authorization on someone else's behalf.
+* `pull` is called by the `recipient`, but it can **never** succeed beyond what the payer already signed off on at creation time. The recipient has no ability to raise `max_amount`, shorten `min_interval`, or extend `expiry`.
+* `revoke` **must** require the `payer`'s signature. No one else — not the recipient, not the backend, not an XLMPay-controlled key — can revoke or freeze an authorization on the payer's behalf, and equally, no one else can prevent a payer from revoking.
+* There is intentionally no "admin" or upgrade key in the core authorization/pull/revoke logic that could override payer-set limits. Any future governance or upgrade mechanism (see roadmap) must not be able to retroactively change the terms of an existing authorization.
+
+---
+
+# ⚠️ Threat Model & Known Open Questions
+
+| Risk | How the contract addresses it | Status |
+|---|---|---|
+| Recipient tries to pull more than `max_amount` | Rejected at the `pull()` check | Implemented |
+| Recipient pulls more frequently than `min_interval` | Rejected via `last_pull_at` check | Implemented |
+| Recipient pulls after `expiry` or after revocation | Rejected via `status`/`expiry` check | Implemented |
+| Reentrancy during the transfer step of `pull()` | Needs explicit handling — transfer should be the last action in the function, state updated before transfer completes | **Needs verification in implementation** |
+| Integer overflow/underflow on amount or timestamp arithmetic | Should use checked arithmetic throughout | **Needs verification in implementation** |
+| Front-running of `pull()` calls | Pulls are deterministic given authorization state; unclear if there's any meaningful front-running surface, but not yet formally analyzed | **Open question** |
+| Payer revokes mid-flight while a `pull()` is in the same ledger close | Needs explicit ordering guarantee or atomic check-then-act within a single transaction | **Needs verification in implementation** |
+| Upgradeable contract logic changing rules retroactively | No upgrade mechanism in the core contract by default; any future upgrade path must not retroactively alter existing authorizations | Design constraint, not yet implemented |
+
+This contract has **not been audited**. Do not deploy to mainnet with real funds until an independent security review has been completed. See the [root README's Threat Model](../README.md#%EF%B8%8F-threat-model--limitations) for project-wide risk context.
+
+---
+
+# 📁 Folder Structure
+
+```text
+contract/
+│
+├── src/
+│   ├── lib.rs                  # Contract entrypoints (create_authorization, pull, revoke, etc.)
+│   ├── types.rs                # Authorization struct and related types
+│   ├── errors.rs                # Custom error/rejection reasons
+│   └── events.rs                # Event definitions
+│
+├── tests/
+│   ├── create_authorization.rs
+│   ├── pull.rs
+│   ├── revoke.rs
+│   └── edge_cases.rs            # interval boundaries, expiry boundaries, overflow cases
+│
+├── Cargo.toml
+├── Cargo.lock
+└── README.md                    # This file
+```
+
+---
+
+# 📦 Installation & Setup
+
+## Prerequisites
+
+* Rust (stable toolchain)
+* [Soroban CLI](https://developers.stellar.org/docs/tools/cli)
+* `wasm32-unknown-unknown` target installed:
+
+```bash
+rustup target add wasm32-unknown-unknown
+```
+
+## Build
+
+```bash
+cd contract
+soroban contract build
+```
+
+This produces a `.wasm` file under `target/wasm32-unknown-unknown/release/`.
+
+## Run Tests
+
+```bash
+cargo test
+```
+
+## Deploy (Testnet Example)
+
+```bash
+soroban contract deploy \
+  --wasm target/wasm32-unknown-unknown/release/xlmpay_contract.wasm \
+  --source <your-testnet-identity> \
+  --network testnet
+```
+
+> Replace `<your-testnet-identity>` with a configured Soroban CLI identity. Never deploy with a mainnet identity until the contract has been audited.
+
+---
+
+# 🧪 Testing Philosophy
+
+Test coverage should specifically target the boundary conditions, since those are where authorization logic is most likely to have bugs:
+
+* exact-boundary timing (`pull()` called at exactly `last_pull_at + min_interval`)
+* exact-boundary amounts (`amount == max_amount` vs. `amount == max_amount + 1`)
+* exact-boundary expiry (`pull()` at the exact expiry timestamp)
+* pulling immediately after revocation
+* pulling on an authorization that never existed / wrong recipient calling `pull()`
+* repeated rapid `pull()` calls in the same ledger
+
+```bash
+cargo test
+```
+
+Passing tests are a baseline, not a substitute for an external audit before mainnet deployment.
+
+---
+
+# 🤝 Contributing
+
+See the [root README](../README.md) for overall contribution guidelines. Contract-specific notes:
+
+* Any change to `pull()`, `create_authorization()`, or `revoke()` logic requires accompanying tests for the boundary conditions listed above
+* Do not introduce admin/upgrade keys capable of altering existing authorizations without extensive discussion and documentation — this directly conflicts with the project's non-custodial design goal
+* Security researchers: please report findings privately first; see `SECURITY.md` (to be added) for responsible disclosure guidelines
+
+---

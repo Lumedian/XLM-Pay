@@ -4,8 +4,8 @@ import {
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
-import { Horizon, SorobanRpc } from '@stellar/stellar-sdk';
-import { v4 as uuidv4 } from 'uuid';
+import { Horizon } from '@stellar/stellar-sdk';
+import { randomUUID as uuidv4 } from 'crypto';
 import { EventStorageService } from './event-storage.service';
 import { WebhookDeliveryService } from './webhook-delivery.service';
 import { StellarEvent } from '../entities/stellar-event.entity';
@@ -60,13 +60,10 @@ export class StellarEventMonitorService
 {
   private readonly logger = new Logger(StellarEventMonitorService.name);
   private horizonServer: Horizon.Server;
-  private sorobanServer: SorobanRpc.Server;
   private paymentStream: (() => void) | null = null;
   private offerStream: (() => void) | null = null;
-  private contractEventStream: (() => void) | null = null;
   private isMonitoring = false;
   private lastLedgerSequence = 0;
-  private lastEventId = '';
 
   constructor(
     private readonly eventStorageService: EventStorageService,
@@ -74,13 +71,8 @@ export class StellarEventMonitorService
   ) {
     const horizonUrl =
       process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org';
-    const sorobanUrl =
-      process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
-    
     this.horizonServer = new Horizon.Server(horizonUrl);
-    this.sorobanServer = new SorobanRpc.Server(sorobanUrl);
     this.logger.log(`Initialized Horizon server at ${horizonUrl}`);
-    this.logger.log(`Initialized Soroban RPC server at ${sorobanUrl}`);
   }
 
   async onModuleInit() {
@@ -110,9 +102,6 @@ export class StellarEventMonitorService
         .call();
       this.lastLedgerSequence = ledger.records[0].sequence;
 
-      // Initialize contract event cursor
-      this.lastEventId = '';
-
       this.logger.log(
         `Starting monitoring from ledger ${this.lastLedgerSequence}`,
       );
@@ -122,9 +111,6 @@ export class StellarEventMonitorService
 
       // Start streaming offers
       this.startOfferStream();
-
-      // Start streaming contract events
-      this.startContractEventStream();
 
       this.logger.log('Stellar event monitoring started successfully');
     } catch (error) {
@@ -153,11 +139,6 @@ export class StellarEventMonitorService
       if (this.offerStream) {
         this.offerStream();
         this.offerStream = null;
-      }
-
-      if (this.contractEventStream) {
-        this.contractEventStream();
-        this.contractEventStream = null;
       }
 
       this.isMonitoring = false;
@@ -236,45 +217,6 @@ export class StellarEventMonitorService
       });
   }
 
-  private startContractEventStream(): void {
-    this.contractEventStream = this.sorobanServer
-      .getEvents({
-        startLedger: this.lastLedgerSequence,
-        cursor: this.lastEventId || undefined,
-        limit: 100,
-      })
-      .then((response) => {
-        if (response.events && response.events.length > 0) {
-          for (const event of response.events) {
-            this.handleContractEvent(event).catch((error) => {
-              this.logger.error(
-                `Error handling contract event: ${error.message}`,
-                error.stack,
-              );
-            });
-          }
-          
-          // Update cursor
-          const lastEvent = response.events[response.events.length - 1];
-          this.lastEventId = lastEvent.id;
-          this.lastLedgerSequence = lastEvent.ledger;
-        }
-      })
-      .catch((error) => {
-        this.logger.error(
-          `Contract event stream error: ${error.message}`,
-          error.stack,
-        );
-        // Attempt to restart the stream
-        setTimeout(() => {
-          if (this.isMonitoring) {
-            this.logger.log('Attempting to restart contract event stream...');
-            this.startContractEventStream();
-          }
-        }, 5000);
-      });
-  }
-
   private async handlePaymentEvent(payment: any): Promise<void> {
     try {
       const eventData = {
@@ -348,123 +290,14 @@ export class StellarEventMonitorService
     }
   }
 
-  private async handleContractEvent(event: SorobanRpc.Api.EventResponse): Promise<void> {
-    try {
-      // Decode the event data
-      const topics = event.topic.map(t => SorobanRpc.xdr.ScVal.fromXDR(t, 'base64'));
-      const value = SorobanRpc.xdr.ScVal.fromXDR(event.value, 'base64');
-      
-      // Extract topic string
-      const topicString = this.decodeScValToString(topics[0]);
-      
-      // Determine event type based on topic
-      const eventType = this.mapTopicToEventType(topicString);
-      
-      if (!eventType) {
-        this.logger.debug(`Unknown contract event topic: ${topicString}`);
-        return;
-      }
-
-      const eventData = {
-        id: uuidv4(),
-        eventType,
-        ledgerSequence: event.ledger,
-        timestamp: event.ledgerClosedAt,
-        transactionHash: event.txHash,
-        sourceAccount: event.contractId, // Contract ID as source for contract events
-        payload: {
-          contractId: event.contractId,
-          topics: topics.map(t => this.decodeScValToString(t)),
-          data: this.decodeEventValue(value),
-          topic: topicString,
-          eventIndex: event.eventIndex,
-        },
-      };
-
-      const savedEvent = await this.eventStorageService.saveEvent(eventData);
-      await this.webhookDeliveryService.queueEventForDelivery(savedEvent);
-
-      this.logger.debug(
-        `Processed contract event ${savedEvent.id} of type ${eventType} from contract ${event.contractId}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to process contract event: ${error.message}`,
-        error.stack,
-      );
-    }
-  }
-
-  private decodeScValToString(scVal: SorobanRpc.xdr.ScVal): string {
-    const scValType = scVal.switch().name;
-    if (scValType === 'scvSymbol') {
-      return scVal.sym().toString();
-    }
-    return scVal.toXDR('base64'); // Fallback to base64
-  }
-
-  private decodeEventValue(value: SorobanRpc.xdr.ScVal): any {
-    const scValType = value.switch().name;
-
-    switch (scValType) {
-      case 'scvBool':
-        return value.b();
-      case 'scvU64':
-        return BigInt(value.u64().toString());
-      case 'scvI64':
-        return BigInt(value.i64().toString());
-      case 'scvU128':
-        const u128 = value.u128();
-        return BigInt(u128.hi().toString()) << 64n | BigInt(u128.lo().toString());
-      case 'scvI128':
-        const i128 = value.i128();
-        return BigInt(i128.hi().toString()) << 64n | BigInt(i128.lo().toString());
-      case 'scvSymbol':
-        return value.sym().toString();
-      case 'scvString':
-        return value.str().toString();
-      case 'scvAddress':
-        return SorobanRpc.Address.fromScVal(value).toString();
-      case 'scvMap': {
-        const map = value.map();
-        if (!map) return {};
-        const result: Record<string, any> = {};
-        for (const entry of map) {
-          const key = this.decodeScValToString(entry.key());
-          const val = this.decodeEventValue(entry.val());
-          result[key] = val;
-        }
-        return result;
-      }
-      case 'scvVec': {
-        const vec = value.vec();
-        if (!vec) return [];
-        return vec.map(v => this.decodeEventValue(v));
-      }
-      default:
-        return value.toXDR('base64');
-    }
-  }
-
-  private mapTopicToEventType(topic: string): EventType | null {
-    // Map contract event topics to our event types
-    switch (topic) {
-      case 'transfer':
-        return EventType.PAYMENT; // Token transfers
-      case 'mint':
-        return EventType.CONTRACT;
-      case 'burn':
-        return EventType.CONTRACT;
-      case 'trade':
-        return EventType.OFFER;
-      case 'stake':
-        return EventType.CONTRACT;
-      case 'unstake':
-        return EventType.CONTRACT;
-      case 'reward':
-        return EventType.CONTRACT;
-      default:
-        return EventType.CONTRACT; // Generic contract event
+  private determineOfferType(offer: any): string {
+    // Simplified logic - in reality would need to check if it's create/update/delete
+    if (parseFloat(offer.amount) === 0) {
+      return 'delete';
+    } else if (offer.offer_id) {
+      return 'update';
+    } else {
+      return 'create';
     }
   }
 
@@ -539,16 +372,12 @@ export class StellarEventMonitorService
   getStatus(): {
     isMonitoring: boolean;
     lastLedgerSequence: number;
-    lastEventId: string;
     horizonUrl: string;
-    sorobanUrl: string;
   } {
     return {
       isMonitoring: this.isMonitoring,
       lastLedgerSequence: this.lastLedgerSequence,
-      lastEventId: this.lastEventId,
       horizonUrl: this.horizonServer.serverURL.toString(),
-      sorobanUrl: this.sorobanServer.serverURL.toString(),
     };
   }
 

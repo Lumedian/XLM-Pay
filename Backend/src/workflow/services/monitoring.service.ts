@@ -109,7 +109,7 @@ export class MonitoringService {
       where: {
         createdAt: Between(since, new Date()),
       },
-      relations: ['workflow'],
+      relations: { workflow: true },
     });
 
     const totalSteps = steps.length;
@@ -185,7 +185,7 @@ export class MonitoringService {
   > {
     const workflow = await this.workflowRepository.findOne({
       where: { id: workflowId },
-      relations: ['steps'],
+      relations: { steps: true },
     });
 
     if (!workflow) {
@@ -279,7 +279,7 @@ export class MonitoringService {
         description: 'Workflow completed successfully',
         metadata: {
           totalDuration:
-            workflow.completedAt.getTime() - workflow.startedAt.getTime(),
+            workflow.completedAt.getTime() - workflow.startedAt!.getTime(),
           totalSteps: workflow.totalSteps,
           retryCount: workflow.retryCount,
         },

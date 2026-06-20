@@ -26,10 +26,10 @@ export class VoiceJob {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', default: JobType.STT })
+  @Column({ type: 'enum', enum: JobType })
   type: JobType;
 
-  @Column({ type: 'varchar', default: JobStatus.PENDING })
+  @Column({ type: 'enum', enum: JobStatus, default: JobStatus.PENDING })
   status: JobStatus;
 
   @Column({ nullable: true })
@@ -64,7 +64,7 @@ export class VoiceJob {
   maxRetries: number;
 
   // Metadata
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
 
   @CreateDateColumn()
@@ -73,6 +73,6 @@ export class VoiceJob {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   completedAt: Date;
 }

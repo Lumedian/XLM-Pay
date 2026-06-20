@@ -128,7 +128,7 @@ describe('Queue Integration - Retries and DLQ', () => {
       const result = await service.requeueJob('deploy-contract', 'job-1');
 
       expect(result).toBeDefined();
-      expect(result.id).toBe('job-2');
+      expect(result!.id).toBe('job-2');
       expect(mockQueues.deployContractQueue.add).toHaveBeenCalledWith(
         'deploy-contract',
         failedJob.data,

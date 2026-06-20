@@ -1,13 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { AiCacheService } from './cache/ai-cache.service';
 import { QuotaService } from './quota/quota.service';
 import { AiRequestDto } from './dto/ai-request.dto';
+import type { AiProvider } from './ai.provider';
+import { AI_FALLBACK_PROVIDER } from './ai.provider';
 
 @Injectable()
 export class AiService {
   constructor(
     private readonly quotaService: QuotaService,
     private readonly cache: AiCacheService,
+    @Inject(AI_FALLBACK_PROVIDER) private readonly provider: AiProvider,
   ) {}
 
   async handlePrompt(dto: AiRequestDto) {
@@ -23,11 +26,7 @@ export class AiService {
     }
 
     try {
-      // TODO: Integrate with actual AI provider
-      const result = {
-        response: 'AI response placeholder',
-        tokensUsed: 100,
-      };
+      const result = await this.provider.generate(dto.prompt);
 
       await this.cache.set(cacheKey, result.response);
       if (dto.userId) {
@@ -37,8 +36,7 @@ export class AiService {
       return { response: result.response, cached: false };
     } catch (err) {
       return {
-        response:
-          'AI service is temporarily unavailable. Please try again later.',
+        response: 'AI service is temporarily unavailable. Please try again later.',
         degraded: true,
       };
     }

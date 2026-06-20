@@ -1,5 +1,5 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { v4 as uuidv4, v4 } from 'uuid';
+import { randomUUID as uuidv4 } from 'crypto';
 import { TraceContext, TraceHeaders } from '../types/trace-context.interface';
 
 /**

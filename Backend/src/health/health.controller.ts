@@ -1,72 +1,74 @@
-// Basic health controller for demonstration
-// In production, this would be properly typed with NestJS decorators
+import {
+  Controller,
+  Get,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { RedisService } from '../redis/redis.service';
+import { StellarEventMonitorService } from '../stellar-monitor/services/stellar-event-monitor.service';
 
+@Controller('health')
 export class HealthController {
-  // Liveness probe - minimal check
-  checkLiveness() {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      version: '1.0.0',
-      environment: 'development',
-    };
+  private readonly logger = new Logger(HealthController.name);
+
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly redisService: RedisService,
+    private readonly stellarMonitorService: StellarEventMonitorService,
+  ) {}
+
+  @Get('live')
+  getLiveness() {
+    return { status: 'ok', timestamp: new Date().toISOString() };
   }
 
-  // Readiness probe - checks critical dependencies
-  checkReadiness() {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      version: '1.0.0',
-      environment: 'development',
-      checks: [
-        { name: 'database', status: 'up' },
-        { name: 'redis', status: 'up' },
-        { name: 'process', status: 'up' },
-      ],
-    };
-  }
+  @Get('ready')
+  async getReadiness() {
+    const checks: Record<string, { status: string; message?: string; [key: string]: any }> = {};
+    let allHealthy = true;
 
-  // Detailed health check
-  checkDetailed() {
-    return {
-      status: 'healthy',
+    try {
+      await this.dataSource.query('SELECT 1');
+      checks.database = { status: 'ok' };
+    } catch (err: any) {
+      this.logger.warn(`Database health check failed: ${err.message}`);
+      checks.database = { status: 'error', message: err.message };
+      allHealthy = false;
+    }
+
+    try {
+      await this.redisService.client.ping();
+      checks.redis = { status: 'ok' };
+    } catch (err: any) {
+      this.logger.warn(`Redis health check failed: ${err.message}`);
+      checks.redis = { status: 'error', message: err.message };
+      allHealthy = false;
+    }
+
+    try {
+      const monitorStatus = this.stellarMonitorService.getStatus();
+      checks.stellarMonitor = {
+        status: monitorStatus.isMonitoring ? 'ok' : 'degraded',
+        isMonitoring: monitorStatus.isMonitoring,
+        lastLedgerSequence: monitorStatus.lastLedgerSequence,
+        horizonUrl: monitorStatus.horizonUrl,
+      };
+    } catch (err: any) {
+      this.logger.warn(`Stellar monitor health check failed: ${err.message}`);
+      checks.stellarMonitor = { status: 'error', message: err.message };
+    }
+
+    const response = {
+      status: allHealthy ? 'ok' : 'error',
       timestamp: new Date().toISOString(),
-      version: '1.0.0',
-      environment: 'development',
-      uptime: process.uptime(),
-      checks: [
-        {
-          name: 'database',
-          status: 'up',
-          message: 'Database connection established',
-          details: { latency: 5, connections: 10 },
-        },
-        {
-          name: 'redis',
-          status: 'up',
-          message: 'Redis cache available',
-          details: { latency: 2, memoryUsage: '45%', keyCount: 1250 },
-        },
-        {
-          name: 'queue',
-          status: 'up',
-          message: 'Queue system operational',
-          details: { activeJobs: 3, pendingJobs: 15, failedJobs: 0 },
-        },
-        {
-          name: 'system',
-          status: 'up',
-          message: 'System resources healthy',
-          details: { cpuUsage: '23%', memoryUsage: '67%' },
-        },
-      ],
-      summary: {
-        total: 4,
-        healthy: 4,
-        degraded: 0,
-        unhealthy: 0,
-      },
+      checks,
     };
+
+    if (!allHealthy) {
+      throw new ServiceUnavailableException(response);
+    }
+
+    return response;
   }
 }

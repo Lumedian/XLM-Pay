@@ -1,23 +1,8 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue, Job } from 'bull';
 import { JobData, JobResult, JobStatus, JobInfo } from '../types/job.types';
-import {
-  EnhancedJobData,
-  JobPriority,
-  RetryStrategy,
-  JobSchedule,
-} from '../types/enhanced-job.types';
 import { RedisService } from '../../redis/redis.service';
-import { RetryStrategyService } from './retry-strategy.service';
-import {
-  DeadLetterQueueService,
-  DlqResurrectionOptions,
-} from './dead-letter-queue.service';
-import { JobPriorityService } from './job-priority.service';
-import { JobMonitoringService } from './job-monitoring.service';
-import { JobSchedulingService } from './job-scheduling.service';
-import { QueueHealthService } from './queue-health.service';
 
 @Injectable()
 export class QueueService {
@@ -31,12 +16,6 @@ export class QueueService {
     @InjectQueue('process-tts') private processTtsQueue: Queue,
     @InjectQueue('index-market-news') private indexMarketNewsQueue: Queue,
     private readonly redisService: RedisService,
-    private readonly retryStrategyService: RetryStrategyService,
-    private readonly deadLetterQueueService: DeadLetterQueueService,
-    private readonly jobPriorityService: JobPriorityService,
-    private readonly jobMonitoringService: JobMonitoringService,
-    private readonly jobSchedulingService: JobSchedulingService,
-    private readonly queueHealthService: QueueHealthService,
   ) {
     this.initializeQueues();
   }
@@ -76,7 +55,7 @@ export class QueueService {
   }
 
   /**
-   * Add a job to the queue with enhanced features
+   * Add a job to the queue
    */
   async addJob<T extends JobData>(
     queueName: string,
@@ -85,70 +64,13 @@ export class QueueService {
     options: any = {},
   ): Promise<Job<T>> {
     const queue = this.getQueueByName(queueName);
+    const job = await queue.add(jobName, data, {
+      removeOnComplete: false, // Keep completed jobs for tracking
+      removeOnFail: false, // Keep failed jobs for analysis
+      ...options,
+    });
 
-    // Determine job priority
-    const priority = this.jobPriorityService.determineJobPriority(
-      jobName,
-      data,
-      data.metadata,
-    );
-
-    // Get retry strategy
-    const retryStrategy =
-      options.retryStrategy ||
-      this.retryStrategyService.getDefaultStrategy(jobName);
-
-    // Create enhanced options
-    const enhancedOptions = this.createEnhancedOptions(
-      priority,
-      retryStrategy,
-      options,
-    );
-
-    const job = await queue.add(jobName, data, enhancedOptions);
-
-    this.logger.log(
-      `Job added: ${jobName} with ID: ${job.id} (priority: ${priority.level})`,
-    );
-    return job;
-  }
-
-  /**
-   * Add enhanced job with full configuration
-   */
-  async addEnhancedJob<T extends EnhancedJobData>(
-    queueName: string,
-    jobName: string,
-    data: T,
-    schedule?: JobSchedule,
-  ): Promise<Job<T>> {
-    const queue = this.getQueueByName(queueName);
-
-    // Determine job priority
-    const priority = this.jobPriorityService.determineJobPriority(
-      jobName,
-      data,
-      data.metadata,
-    );
-
-    // Get retry strategy
-    const retryStrategy =
-      data.retryStrategy ||
-      this.retryStrategyService.getDefaultStrategy(jobName);
-
-    // Create enhanced options with scheduling
-    const enhancedOptions = this.createEnhancedOptions(
-      priority,
-      retryStrategy,
-      {},
-      schedule,
-    );
-
-    const job = await queue.add(jobName, data, enhancedOptions);
-
-    this.logger.log(
-      `Enhanced job added: ${jobName} with ID: ${job.id} (priority: ${priority.level})`,
-    );
+    this.logger.log(`Job added: ${jobName} with ID: ${job.id}`);
     return job;
   }
 
@@ -356,169 +278,38 @@ export class QueueService {
   }
 
   /**
-   * Handle job failure with enhanced retry logic and DLQ
+   * Handle job failure - move to DLQ if max retries exceeded
    */
   private async handleJobFailure(job: Job, error: Error): Promise<void> {
     const maxAttempts = job.opts.attempts || 1;
     const attempts = job.attemptsMade;
-    const retryStrategy = this.retryStrategyService.getDefaultStrategy(
-      job.name,
-    );
 
     this.logger.error(
       `Job ${job.id} (${job.name}) failed: ${error.message} (attempt ${attempts}/${maxAttempts})`,
     );
 
-    // Check if job should be retried
-    const shouldRetry = this.retryStrategyService.shouldRetry(
-      error,
-      attempts,
-      retryStrategy,
-      job.queue.name,
-    );
+    // If max retries exceeded, move to DLQ
+    if (attempts >= maxAttempts) {
+      const dlqKey = `${this.DLQ_PREFIX}${job.queue.name}`;
+      const dlqItem = JSON.stringify({
+        id: job.id,
+        name: job.name,
+        data: job.data,
+        error: error.message,
+        attempts: attempts,
+        maxAttempts: maxAttempts,
+        failedAt: new Date().toISOString(),
+      });
 
-    // If max retries exceeded or not retryable, move to enhanced DLQ
-    if (attempts >= maxAttempts || !shouldRetry) {
-      // Determine category based on error
-      const errorCategory = this.categorizeErrorForDLQ(error);
-
-      await this.deadLetterQueueService.addToDLQ(
-        job.queue.name,
-        job.data,
-        error,
-        attempts,
-        retryStrategy,
-        errorCategory,
-      );
-
-      this.logger.warn(
-        `Job ${job.id} (${job.name}) moved to enhanced DLQ after ${attempts} attempts (category: ${errorCategory})`,
-      );
+      try {
+        await this.redisService.client.rPush(dlqKey, dlqItem);
+        this.logger.warn(
+          `Job ${job.id} (${job.name}) moved to DLQ after ${attempts} attempts`,
+        );
+      } catch (dlqError) {
+        this.logger.error(`Failed to move job to DLQ: ${dlqError.message}`);
+      }
     }
-  }
-
-  /**
-   * Categorize error for DLQ purposes
-   */
-  private categorizeErrorForDLQ(error: Error): string {
-    const message = error.message.toLowerCase();
-
-    if (
-      message.includes('network') ||
-      message.includes('connect') ||
-      message.includes('econn')
-    ) {
-      return 'network-error';
-    } else if (message.includes('timeout') || message.includes('timed out')) {
-      return 'timeout-error';
-    } else if (message.includes('validate') || message.includes('invalid')) {
-      return 'validation-error';
-    } else if (message.includes('not found') || message.includes('missing')) {
-      return 'resource-error';
-    } else if (
-      message.includes('permission') ||
-      message.includes('unauthorized')
-    ) {
-      return 'permission-error';
-    } else {
-      return 'unknown-error';
-    }
-  }
-
-  /**
-   * Create enhanced Bull queue options
-   */
-  private createEnhancedOptions(
-    priority: JobPriority,
-    retryStrategy: RetryStrategy,
-    baseOptions: any = {},
-    schedule?: JobSchedule,
-  ): any {
-    const retryOptions =
-      this.retryStrategyService.createBullRetryOptions(retryStrategy);
-    const priorityOptions =
-      this.jobPriorityService.createPriorityOptions(priority);
-    const scheduleOptions = schedule
-      ? this.jobPriorityService.createScheduledOptions(schedule.delay, priority)
-      : {};
-
-    return {
-      removeOnComplete: 100, // Keep more jobs for metrics
-      removeOnFail: 50, // Keep failed jobs for analysis
-      ...retryOptions,
-      ...priorityOptions,
-      ...scheduleOptions,
-      ...baseOptions,
-    };
-  }
-
-  /**
-   * Get enhanced dead-letter queue items
-   */
-  async getEnhancedDLQ(queueName: string, limit: number = 50): Promise<any[]> {
-    return this.deadLetterQueueService.getDLQItems(queueName, limit);
-  }
-
-  /**
-   * Get DLQ statistics
-   */
-  async getDLQStatistics(queueName: string): Promise<any> {
-    return this.deadLetterQueueService.getDLQStats(queueName);
-  }
-
-  /**
-   * Retry job from enhanced DLQ
-   */
-  async retryFromEnhancedDLQ(
-    queueName: string,
-    dlqItemId: string,
-  ): Promise<boolean> {
-    return this.deadLetterQueueService.retryFromDLQ(queueName, dlqItemId);
-  }
-
-  /**
-   * Process scheduled retries from DLQ
-   */
-  async processScheduledRetries(queueName: string): Promise<string[]> {
-    return this.deadLetterQueueService.processScheduledRetries(queueName);
-  }
-
-  /**
-   * Get queue metrics
-   */
-  async getQueueMetrics(queueName: string): Promise<any> {
-    return this.jobMonitoringService.getQueueMetrics(queueName);
-  }
-
-  /**
-   * Get all queue metrics
-   */
-  async getAllQueueMetrics(): Promise<any[]> {
-    return this.jobMonitoringService.getAllQueueMetrics();
-  }
-
-  /**
-   * Get queue health status
-   */
-  async getQueueHealth(queueName: string): Promise<any> {
-    return this.jobMonitoringService.getQueueHealth(queueName);
-  }
-
-  /**
-   * Get performance analytics
-   */
-  async getPerformanceAnalytics(queueName: string): Promise<any> {
-    return this.jobMonitoringService.getPerformanceAnalytics(queueName);
-  }
-
-  /**
-   * Purge old DLQ items
-   */
-  async purgeDLQ(
-    queueName: string,
-    olderThanDays: number = 30,
-  ): Promise<number> {
-    return this.deadLetterQueueService.purgeDLQ(queueName, olderThanDays);
   }
 
   /**
@@ -540,258 +331,4 @@ export class QueueService {
         return JobStatus.PENDING;
     }
   }
-
-  /**
-   * Schedule a job with advanced scheduling options
-   */
-  async scheduleJob(
-    queueName: string,
-    jobName: string,
-    data: EnhancedJobData,
-    schedule: JobSchedule,
-  ): Promise<any> {
-    return this.jobSchedulingService.scheduleJob(
-      queueName,
-      jobName,
-      data,
-      schedule,
-    );
-  }
-
-  /**
-   * Schedule a recurring job with cron expression
-   */
-  async scheduleRecurringJob(
-    queueName: string,
-    jobName: string,
-    data: EnhancedJobData,
-    cronExpression: string,
-    maxRuns?: number,
-  ): Promise<any> {
-    return this.jobSchedulingService.scheduleRecurringJob(
-      queueName,
-      jobName,
-      data,
-      cronExpression,
-      maxRuns,
-    );
-  }
-
-  /**
-   * Chain jobs together
-   */
-  async chainJobs(
-    firstJob: {
-      queueName: string;
-      jobName: string;
-      data: EnhancedJobData;
-      schedule?: JobSchedule;
-    },
-    secondJob: {
-      queueName: string;
-      jobName: string;
-      data: EnhancedJobData;
-      schedule?: JobSchedule;
-    },
-  ): Promise<any> {
-    return this.jobSchedulingService.chainJobs(firstJob, secondJob);
-  }
-
-  /**
-   * Bulk add jobs to a queue
-   */
-  async bulkAddJobs<T extends JobData>(
-    queueName: string,
-    jobs: Array<{ jobName: string; data: T; options?: any }>,
-  ): Promise<BulkJobOperationResult> {
-    const results: BulkJobOperationResult = {
-      success: 0,
-      failed: 0,
-      errors: [],
-    };
-
-    for (const jobSpec of jobs) {
-      try {
-        await this.addJob(
-          queueName,
-          jobSpec.jobName,
-          jobSpec.data,
-          jobSpec.options,
-        );
-        results.success++;
-      } catch (error) {
-        results.failed++;
-        results.errors.push({
-          jobId: 'unknown',
-          error: error.message,
-        });
-      }
-    }
-
-    return results;
-  }
-
-  /**
-   * Bulk process jobs from DLQ by category
-   */
-  async bulkProcessDLQByCategory(
-    queueName: string,
-    category: string,
-    limit: number = 10,
-  ): Promise<number> {
-    return this.deadLetterQueueService.bulkRequeueByCategory(
-      queueName,
-      category,
-      limit,
-    );
-  }
-
-  /**
-   * Resurrect a job from DLQ with optional modifications
-   */
-  async resurrectJobFromDLQ(
-    queueName: string,
-    dlqItemId: string,
-    options?: DlqResurrectionOptions,
-  ): Promise<boolean> {
-    return this.deadLetterQueueService.resurrectJob(
-      queueName,
-      dlqItemId,
-      options,
-    );
-  }
-
-  /**
-   * Get enhanced dead-letter queue items by category
-   */
-  async getEnhancedDLQByCategory(
-    queueName: string,
-    category: string,
-    limit: number = 50,
-  ): Promise<any[]> {
-    return this.deadLetterQueueService.getItemsByCategory(
-      queueName,
-      category,
-      limit,
-    );
-  }
-
-  /**
-   * Get health status for all queues
-   */
-  async getAllQueueHealth(): Promise<any[]> {
-    return this.queueHealthService.getAllQueueHealth();
-  }
-
-  /**
-   * Get system health summary
-   */
-  async getSystemHealthSummary(): Promise<any> {
-    return this.queueHealthService.getSystemHealthSummary();
-  }
-
-  /**
-   * Get trend analysis for a queue
-   */
-  async getTrendAnalysis(queueName: string): Promise<any> {
-    return this.jobMonitoringService.getTrendAnalysis(queueName);
-  }
-
-  /**
-   * Get performance predictions for a queue
-   */
-  async getPredictions(queueName: string): Promise<any> {
-    return this.jobMonitoringService.getPredictions(queueName);
-  }
-
-  /**
-   * Get scaling suggestions for a queue
-   */
-  async getScalingSuggestion(queueName: string): Promise<any> {
-    return this.queueHealthService.getScalingSuggestion(queueName);
-  }
-
-  /**
-   * Purge old DLQ items by category
-   */
-  async purgeDLQByCategory(
-    queueName: string,
-    category: string,
-    olderThanDays: number = 30,
-  ): Promise<number> {
-    return this.deadLetterQueueService.purgeDLQ(
-      queueName,
-      olderThanDays,
-      category,
-    );
-  }
-
-  /**
-   * Get resource utilization for a queue
-   */
-  async getResourceUtilization(queueName: string): Promise<any> {
-    return this.jobPriorityService.getResourceUtilization(queueName);
-  }
-
-  /**
-   * Set system load factor for dynamic priority adjustment
-   */
-  async setSystemLoadFactor(factor: number): Promise<void> {
-    this.jobPriorityService.setSystemLoadFactor(factor);
-  }
-
-  /**
-   * Get active alerts for a queue
-   */
-  async getActiveAlerts(queueName: string): Promise<any> {
-    return this.jobMonitoringService.getActiveAlerts(queueName);
-  }
-
-  /**
-   * Get all scheduled jobs
-   */
-  async getAllScheduledJobs(): Promise<any[]> {
-    return this.jobSchedulingService.getScheduledJobs();
-  }
-
-  /**
-   * Get scheduled jobs for a specific queue
-   */
-  async getScheduledJobsByQueue(queueName: string): Promise<any[]> {
-    return this.jobSchedulingService.getScheduledJobsByQueue(queueName);
-  }
-
-  /**
-   * Get a specific scheduled job
-   */
-  async getScheduledJob(jobId: string): Promise<any> {
-    return this.jobSchedulingService.getScheduledJob(jobId);
-  }
-
-  /**
-   * Cancel a scheduled job
-   */
-  async cancelScheduledJob(jobId: string): Promise<boolean> {
-    return this.jobSchedulingService.cancelScheduledJob(jobId);
-  }
-
-  /**
-   * Trigger a scheduled job manually
-   */
-  async triggerScheduledJob(jobId: string): Promise<boolean> {
-    return this.jobSchedulingService.triggerScheduledJob(jobId);
-  }
-
-  /**
-   * Update a scheduled job
-   */
-  async updateScheduledJob(jobId: string, updates: any): Promise<boolean> {
-    return this.jobSchedulingService.updateScheduledJob(jobId, updates);
-  }
-}
-
-export interface BulkJobOperationResult {
-  success: number;
-  failed: number;
-  errors: Array<{ jobId: string; error: string }>;
 }

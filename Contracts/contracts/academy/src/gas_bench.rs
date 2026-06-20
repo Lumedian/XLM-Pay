@@ -1,59 +1,91 @@
-// Soroban contract benchmarking for AcademyVestingContract
-// Usage: Run with cargo test --features benchmark
+#![cfg(test)]
 
-#[cfg(test)]
-mod gas_benchmarks {
-    use super::*;
-    use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, token, Address, Env};
+use crate::vesting::{AcademyVestingContract, AcademyVestingContractClient};
+use shared::circuit_breaker::CircuitBreakerConfig;
+use soroban_sdk::token::StellarAssetClient;
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, Env,
+};
 
-    fn set_timestamp(env: &Env, timestamp: u64) {
-        let mut ledger_info = env.ledger().get();
-        ledger_info.timestamp = timestamp;
-        env.ledger().set(ledger_info);
+extern crate std;
+use std::println;
+
+fn default_cb_config() -> CircuitBreakerConfig {
+    CircuitBreakerConfig {
+        max_volume_per_period: 1_000_000_000i128,
+        max_tx_count_per_period: 100u64,
+        period_duration: 3600u64,
+    }
+}
+
+fn setup_claim_env(
+    env: &Env,
+) -> (
+    AcademyVestingContractClient<'_>,
+    Address,
+    Address,
+    StellarAssetClient<'static>,
+) {
+    env.mock_all_auths();
+
+    let admin = Address::generate(env);
+    let beneficiary = Address::generate(env);
+    let governance = Address::generate(env);
+    let reward_token = env.register_stellar_asset_contract(admin.clone());
+    let reward_admin = StellarAssetClient::new(env, &reward_token);
+
+    let contract_id = env.register_contract(None, AcademyVestingContract);
+    let client = AcademyVestingContractClient::new(env, &contract_id);
+    let cb_config = default_cb_config();
+    client.init(&admin, &reward_token, &governance, &cb_config);
+
+    for amount in [500i128, 750i128, 900i128] {
+        client.grant_vesting(&admin, &beneficiary, &amount, &0, &0, &10);
     }
 
-    fn setup_contract() -> (Env, Address, Address, Address) {
-        let env = Env::default();
-        env.mock_all_auths();
-        let admin = Address::generate(&env);
-        let issuer = Address::generate(&env);
-        let reward_token = env.register_stellar_asset_contract(issuer);
-        let governance = Address::generate(&env);
-        AcademyVestingContract::init(env.clone(), admin.clone(), reward_token.clone(), governance.clone()).unwrap();
-        (env, admin, reward_token, governance)
-    }
+    reward_admin.mint(&contract_id, &5_000);
+    env.ledger().with_mut(|li| li.timestamp = 20);
 
-    #[test]
-    fn bench_grant_vesting() {
-        let (env, admin, _reward_token, _governance) = setup_contract();
-        let beneficiary = Address::generate(&env);
-        let start_time = 1000u64;
-        let cliff = 100u64;
-        let duration = 1000u64;
-        let amount = 1000i128;
-        let before = env.ledger().timestamp();
-        let _ = AcademyVestingContract::grant_vesting(env.clone(), admin.clone(), beneficiary, amount, start_time, cliff, duration);
-        let after = env.ledger().timestamp();
-        println!("grant_vesting gas: {}", after - before);
-    }
+    (client, admin, beneficiary, reward_admin)
+}
 
-    #[test]
-    fn bench_claim() {
-        let (env, admin, reward_token, _governance) = setup_contract();
-        let beneficiary = Address::generate(&env);
-        let start_time = 0u64;
-        let cliff = 100u64;
-        let duration = 1000u64;
-        let amount = 1000i128;
-        let _ = AcademyVestingContract::grant_vesting(env.clone(), admin.clone(), beneficiary.clone(), amount, start_time, cliff, duration);
+#[test]
+fn test_batch_claim_gas_efficiency() {
+    let env = Env::default();
+    let (client, _admin, beneficiary, _reward_admin) = setup_claim_env(&env);
 
-        let token_admin = token::StellarAssetClient::new(&env, &reward_token);
-        token_admin.mint(&env.current_contract_address(), &amount);
+    env.budget().reset_default();
+    let _ = client.claim(&1u64, &beneficiary);
+    let claim_one_cpu = env.budget().cpu_instruction_cost();
 
-        set_timestamp(&env, start_time + cliff + 500);
-        let before = env.ledger().timestamp();
-        let _ = AcademyVestingContract::claim(env.clone(), 1, beneficiary);
-        let after = env.ledger().timestamp();
-        println!("claim gas: {}", after - before);
-    }
+    env.budget().reset_default();
+    let _ = client.claim(&2u64, &beneficiary);
+    let claim_two_cpu = env.budget().cpu_instruction_cost();
+
+    env.budget().reset_default();
+    let _ = client.claim(&3u64, &beneficiary);
+    let claim_three_cpu = env.budget().cpu_instruction_cost();
+
+    let individual_total = claim_one_cpu + claim_two_cpu + claim_three_cpu;
+
+    let batch_env = Env::default();
+    let (batch_client, _batch_admin, batch_beneficiary, _batch_reward_admin) =
+        setup_claim_env(&batch_env);
+
+    batch_env.budget().reset_default();
+    let batch_claimed = batch_client.batch_claim(
+        &soroban_sdk::vec![&batch_env, 1u64, 2u64, 3u64],
+        &batch_beneficiary,
+    );
+    let batch_cpu = batch_env.budget().cpu_instruction_cost();
+
+    println!("Academy batch-claim CPU: {}", batch_cpu);
+    println!("Academy 3 individual claims CPU: {}", individual_total);
+
+    assert_eq!(batch_claimed, 2_150);
+    assert!(
+        batch_cpu < individual_total,
+        "batch claim should use less CPU"
+    );
 }

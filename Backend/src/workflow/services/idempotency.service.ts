@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createHash } from 'crypto';
-import { v4 as uuidv4 } from 'uuid';
+import { createHash, randomUUID as uuidv4 } from 'crypto';
 
 @Injectable()
 export class IdempotencyService {

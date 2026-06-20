@@ -2,6 +2,12 @@
 
 # dependencies
 /node_modules
+/.npm
+
+# hardhat cache/artifacts
+/artifacts
+/cache
+/Library
 
 # next.js
 /.next/
@@ -28,14 +34,8 @@ next-env.d.ts
 
 # Rust
 /target/
-**/target/
-Cargo.lock
-!Cargo.lock
 **/*.rs.bk
 *.pdb
-**/*.dSYM/
-**/test_snapshots/
-.cargo/
 
 # Soroban
 *.wasm

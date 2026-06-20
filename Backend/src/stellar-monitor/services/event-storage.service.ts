@@ -46,8 +46,6 @@ export class EventStorageService {
     startDate?: Date,
     endDate?: Date,
     deliveryStatus?: DeliveryStatus,
-    contractId?: string,
-    sourceAccount?: string,
   ): Promise<[StellarEvent[], number]> {
     const queryBuilder = this.eventRepository.createQueryBuilder('event');
 
@@ -69,14 +67,6 @@ export class EventStorageService {
       });
     }
 
-    if (contractId) {
-      queryBuilder.andWhere('event.payload ->> \'contractId\' = :contractId', { contractId });
-    }
-
-    if (sourceAccount) {
-      queryBuilder.andWhere('event.sourceAccount = :sourceAccount', { sourceAccount });
-    }
-
     return queryBuilder
       .orderBy('event.timestamp', 'DESC')
       .skip((page - 1) * limit)
@@ -84,42 +74,8 @@ export class EventStorageService {
       .getManyAndCount();
   }
 
-  async getEventsByContract(contractId: string, limit: number = 100): Promise<StellarEvent[]> {
+  async getRecentEvents(limit: number = 100): Promise<StellarEvent[]> {
     return this.eventRepository.find({
-      where: {
-        payload: { contractId } as any,
-      },
-      order: { timestamp: 'DESC' },
-      take: limit,
-    });
-  }
-
-  async getEventsByAccount(account: string, limit: number = 100): Promise<StellarEvent[]> {
-    return this.eventRepository.find({
-      where: { sourceAccount: account },
-      order: { timestamp: 'DESC' },
-      take: limit,
-    });
-  }
-
-  async getEventsByTransaction(txHash: string): Promise<StellarEvent[]> {
-    return this.eventRepository.find({
-      where: { transactionHash: txHash },
-      order: { timestamp: 'ASC' },
-    });
-  }
-
-  async getContractEvents(contractId: string, eventType?: EventType, limit: number = 100): Promise<StellarEvent[]> {
-    const where: any = {
-      payload: { contractId } as any,
-    };
-    
-    if (eventType) {
-      where.eventType = eventType;
-    }
-
-    return this.eventRepository.find({
-      where,
       order: { timestamp: 'DESC' },
       take: limit,
     });

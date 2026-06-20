@@ -46,7 +46,7 @@ export class DeployContractProcessor {
 
       // Simulate contract deployment
       const deploymentResult = await this.deployToNetwork(
-        compilationResult.bytecode,
+        compilationResult.bytecode!,
         network,
         initializer,
       );

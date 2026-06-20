@@ -4,15 +4,15 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
-[features]
-default = []
-testutils = []
-
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+testutils = ["soroban-sdk/testutils"]
+
 [dependencies]
 soroban-sdk = { version = "=20.5.0", default-features = false }
+shared = { path = "../../shared" }
 
 [dev-dependencies]
 soroban-sdk = { version = "=20.5.0", features = ["testutils"], default-features = false }

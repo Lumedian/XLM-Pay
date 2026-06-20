@@ -21,8 +21,6 @@ import { NonceService } from '../services/nonce.service';
 import { WalletService } from '../services/wallet.service';
 import { JwtAuthService } from '../services/jwt-auth.service';
 import { ApiTokenService } from '../services/api-token.service';
-import { MetricsService } from '../../logging/metrics.service';
-import { StructuredLogger } from '../../logging/structured-logger.service';
 import { RequestNonceDto } from '../dto/request-nonce.dto';
 import { WalletLoginDto } from '../dto/wallet-login.dto';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
@@ -45,8 +43,6 @@ export class AuthController {
     private readonly apiTokenService: ApiTokenService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
-    private readonly logger: StructuredLogger,
-    private readonly metrics: MetricsService,
   ) {}
 
   @Post('nonce')
@@ -96,73 +92,68 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid signature or nonce' })
   @ApiResponse({ status: 429, description: 'Too many requests' })
   async walletLogin(@Body() dto: WalletLoginDto) {
-    try {
-      // Validate nonce
-      const nonceRecord = await this.nonceService.validateNonce(
-        dto.nonce,
-        dto.publicKey,
-      );
+    // Validate nonce
+    const nonceRecord = await this.nonceService.validateNonce(
+      dto.nonce,
+      dto.publicKey,
+    );
 
-      // Construct message to verify
-      const message = `Sign this message to authenticate with Stellara: ${dto.nonce}`;
+    // Construct message to verify
+    const message = `Sign this message to authenticate with Stellara: ${dto.nonce}`;
 
-      // Verify signature
-      const isValid = await this.walletService.verifySignature(
-        dto.publicKey,
-        dto.signature,
-        message,
-      );
+    // Verify signature
+    const isValid = await this.walletService.verifySignature(
+      dto.publicKey,
+      dto.signature,
+      message,
+    );
 
-      if (!isValid) {
-        throw new Error('Invalid signature');
-      }
-
-      // Mark nonce as used
-      await this.nonceService.markNonceUsed(dto.nonce);
-
-      // Find or create user
-      let user = await this.walletService.findUserByWallet(dto.publicKey);
-
-      let isNewUser = false;
-
-      if (!user) {
-        user = await this.walletService.createUserWithWallet(dto.publicKey);
-        isNewUser = true;
-      }
-
-      if (isNewUser) {
-        await this.auditService.logAction('USER_CREATED', user.id, user.id, {
-          wallet: dto.publicKey,
-        });
-      }
-
-      // Update wallet last used
-      await this.walletService.updateLastUsed(dto.publicKey);
-
-      // Generate tokens
-      const accessToken = await this.jwtAuthService.generateAccessToken(
-        user.id,
-      );
-      const refreshTokenData = await this.jwtAuthService.generateRefreshToken(
-        user.id,
-      );
-
-      return {
-        accessToken,
-        refreshTokenId: refreshTokenData.id,
-        refreshToken: refreshTokenData.token,
-        user: {
-          id: user.id,
-          email: user.email,
-          username: user.username,
-          createdAt: user.createdAt,
-        },
-      };
-    } catch (err) {
-      this.logger.error('walletLogin failed', err.stack, AuthController.name);
-      this.metrics.incrementError('high', 'auth');
-      throw err;
+    if (!isValid) {
+      throw new Error('Invalid signature');
     }
+
+    // Mark nonce as used
+    await this.nonceService.markNonceUsed(dto.nonce);
+
+    // Find or create user
+    let user = await this.walletService.findUserByWallet(dto.publicKey);
+
+    // if (!user) {
+    //   user = await this.walletService.createUserWithWallet(dto.publicKey);
+    // }
+
+    let isNewUser = false;
+
+    if (!user) {
+      user = await this.walletService.createUserWithWallet(dto.publicKey);
+      isNewUser = true;
+    }
+
+    if (isNewUser) {
+      await this.auditService.logAction('USER_CREATED', user.id, user.id, {
+        wallet: dto.publicKey,
+      });
+    }
+
+    // Update wallet last used
+    await this.walletService.updateLastUsed(dto.publicKey);
+
+    // Generate tokens
+    const accessToken = await this.jwtAuthService.generateAccessToken(user.id);
+    const refreshTokenData = await this.jwtAuthService.generateRefreshToken(
+      user.id,
+    );
+
+    return {
+      accessToken,
+      refreshToken: refreshTokenData.token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        createdAt: user.createdAt,
+      },
+    };
   }
 
   @Post('refresh')
@@ -184,13 +175,11 @@ export class AuthController {
   @ApiResponse({ status: 429, description: 'Too many requests' })
   async refreshToken(@Body() dto: RefreshTokenDto) {
     const tokens = await this.jwtAuthService.refreshAccessToken(
-      dto.refreshTokenId,
       dto.refreshToken,
     );
 
     return {
       accessToken: tokens.accessToken,
-      refreshTokenId: tokens.newRefreshTokenId,
       refreshToken: tokens.newRefreshToken,
     };
   }

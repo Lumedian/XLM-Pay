@@ -1,14 +1,16 @@
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+
 [package]
 name = "trading"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-default = []
-testutils = []
-
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+testutils = ["soroban-sdk/testutils"]
 
 [dependencies]
 soroban-sdk = "20.5.0"

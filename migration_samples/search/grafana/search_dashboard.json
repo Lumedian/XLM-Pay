@@ -1,9 +1,0 @@
-{
-  "title": "Search Service Overview",
-  "panels": [
-    { "id": 1, "title": "Search P95 Latency", "type": "graph" },
-    { "id": 2, "title": "Queries per Second", "type": "graph" },
-    { "id": 3, "title": "Zero-result Rate", "type": "stat" }
-  ],
-  "schemaVersion": 16
-}

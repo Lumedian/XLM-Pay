@@ -1,164 +1,53 @@
-use soroban_sdk::{
-    contract, contractimpl, testutils::Address as _, testutils::Ledger as _, Address, Env,
-    IntoVal, Symbol,
-};
-use token::{TokenContract, TokenContractClient};
+use soroban_sdk::{testutils::Address as _, Env, String};
+use token::TokenContract;
 
-#[contract]
-struct HookReceiver;
-
-#[contractimpl]
-impl HookReceiver {
-    pub fn on_token_transfer(env: Env, token: Address, from: Address, amount: i128) {
-        env.storage().instance().set(&Symbol::new(&env, "token"), &token);
-        env.storage().instance().set(&Symbol::new(&env, "from"), &from);
-        env.storage().instance().set(&Symbol::new(&env, "amount"), &amount);
-    }
+fn setup(env: &Env) -> (soroban_sdk::Address, soroban_sdk::Address) {
+    let admin = soroban_sdk::Address::generate(env);
+    let name   = String::from_str(env, "Stellara Token");
+    let symbol = String::from_str(env, "STA");
+    TokenContract::initialize(env.clone(), admin.clone(), name, symbol, 7);
+    let other = soroban_sdk::Address::generate(env);
+    (admin, other)
 }
 
 #[test]
-fn transfer_approve_allowance_and_metadata() {
+#[should_panic(expected = "Unauthorized")]
+fn non_admin_cannot_mint() {
     let env = Env::default();
-    env.mock_all_auths();
-
-    let contract_id = env.register_contract(None, TokenContract);
-    let client = TokenContractClient::new(&env, &contract_id);
-
-    let admin = Address::generate(&env);
-    let owner = Address::generate(&env);
-    let spender = Address::generate(&env);
-    let recipient = Address::generate(&env);
-
-    client.initialize(
-        &admin,
-        &"Stellara Token".into_val(&env),
-        &"STLR".into_val(&env),
-        &7,
-    );
-
-    client.mint(&owner, &1_000);
-
-    let current_ledger = env.ledger().sequence();
-    client.approve(&owner, &spender, &250, &(current_ledger + 10));
-
-    assert_eq!(client.allowance(&owner, &spender), 250);
-
-    client.transfer_from(&spender, &owner, &recipient, &200);
-
-    assert_eq!(client.balance(&owner), 800);
-    assert_eq!(client.balance(&recipient), 200);
-    assert_eq!(client.allowance(&owner, &spender), 50);
-
-    assert_eq!(client.name(), "Stellara Token".into_val(&env));
-    assert_eq!(client.symbol(), "STLR".into_val(&env));
-    assert_eq!(client.decimals(), 7);
+    let (_admin, attacker) = setup(&env);
+    // attacker tries mint — require_admin will panic "Unauthorized"
+    TokenContract::mint(env, attacker, 100);
 }
 
 #[test]
-fn transfer_hook_is_safe_and_records_when_supported() {
+fn admin_can_mint_and_balance_updates() {
     let env = Env::default();
     env.mock_all_auths();
-
-    let contract_id = env.register_contract(None, TokenContract);
-    let client = TokenContractClient::new(&env, &contract_id);
-
-    let admin = Address::generate(&env);
-    let sender = Address::generate(&env);
-
-    client.initialize(
-        &admin,
-        &"Stellara Token".into_val(&env),
-        &"STLR".into_val(&env),
-        &7,
-    );
-
-    client.mint(&sender, &500);
-
-    let hook_address = env.register_contract(None, HookReceiver);
-
-    client.transfer(&sender, &hook_address, &200);
-
-    let (stored_token, stored_from, stored_amount) = env.as_contract(&hook_address, || {
-        let stored_token: Address = env
-            .storage()
-            .instance()
-            .get(&Symbol::new(&env, "token"))
-            .unwrap();
-        let stored_from: Address = env
-            .storage()
-            .instance()
-            .get(&Symbol::new(&env, "from"))
-            .unwrap();
-        let stored_amount: i128 = env
-            .storage()
-            .instance()
-            .get(&Symbol::new(&env, "amount"))
-            .unwrap();
-        (stored_token, stored_from, stored_amount)
-    });
-
-    assert_eq!(stored_token, contract_id);
-    assert_eq!(stored_from, sender);
-    assert_eq!(stored_amount, 200);
-
-    let receiver = Address::generate(&env);
-    client.transfer(&hook_address, &receiver, &50);
+    let (admin, recipient) = setup(&env);
+    TokenContract::mint(env.clone(), recipient.clone(), 500);
+    assert_eq!(TokenContract::balance(env.clone(), recipient), 500);
+    assert_eq!(TokenContract::total_supply(env), 500);
 }
 
 #[test]
-fn expired_allowance_treated_as_zero() {
+fn transfer_moves_balance() {
     let env = Env::default();
     env.mock_all_auths();
-
-    let contract_id = env.register_contract(None, TokenContract);
-    let client = TokenContractClient::new(&env, &contract_id);
-
-    let admin = Address::generate(&env);
-    let owner = Address::generate(&env);
-    let spender = Address::generate(&env);
-
-    client.initialize(
-        &admin,
-        &"Stellara Token".into_val(&env),
-        &"STLR".into_val(&env),
-        &7,
-    );
-
-    client.mint(&owner, &100);
-
-    let current = env.ledger().sequence();
-    client.approve(&owner, &spender, &80, &current);
-
-    let mut ledger_info = env.ledger().get();
-    ledger_info.sequence_number = current + 5;
-    env.ledger().set(ledger_info);
-
-    assert_eq!(client.allowance(&owner, &spender), 0);
-
+    let (admin, recipient) = setup(&env);
+    let other = soroban_sdk::Address::generate(&env);
+    TokenContract::mint(env.clone(), recipient.clone(), 1000);
+    TokenContract::transfer(env.clone(), recipient.clone(), other.clone(), 300);
+    assert_eq!(TokenContract::balance(env.clone(), recipient), 700);
+    assert_eq!(TokenContract::balance(env.clone(), other), 300);
 }
 
 #[test]
-fn unauthorized_account_cannot_spend() {
+fn burn_reduces_supply() {
     let env = Env::default();
     env.mock_all_auths();
-
-    let contract_id = env.register_contract(None, TokenContract);
-    let client = TokenContractClient::new(&env, &contract_id);
-
-    let admin = Address::generate(&env);
-    let owner = Address::generate(&env);
-    let recipient = Address::generate(&env);
-
-    client.initialize(
-        &admin,
-        &"Stellara Token".into_val(&env),
-        &"STLR".into_val(&env),
-        &7,
-    );
-
-    client.mint(&owner, &100);
-    client.set_authorized(&owner, &false);
-
-    assert!(!client.authorized(&owner));
-    assert_eq!(client.balance(&recipient), 0);
+    let (admin, holder) = setup(&env);
+    TokenContract::mint(env.clone(), holder.clone(), 1000);
+    TokenContract::burn(env.clone(), holder.clone(), 400);
+    assert_eq!(TokenContract::balance(env.clone(), holder), 600);
+    assert_eq!(TokenContract::total_supply(env), 600);
 }

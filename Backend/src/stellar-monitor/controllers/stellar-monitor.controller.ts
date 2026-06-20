@@ -163,16 +163,12 @@ export class StellarMonitorController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'eventType', required: false, enum: EventType })
   @ApiQuery({ name: 'deliveryStatus', required: false, enum: DeliveryStatus })
-  @ApiQuery({ name: 'contractId', required: false, type: String })
-  @ApiQuery({ name: 'sourceAccount', required: false, type: String })
   @ApiResponse({ status: 200, description: 'List of events' })
   async getEvents(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('eventType') eventType?: EventType,
     @Query('deliveryStatus') deliveryStatus?: DeliveryStatus,
-    @Query('contractId') contractId?: string,
-    @Query('sourceAccount') sourceAccount?: string,
   ): Promise<{
     events: StellarEvent[];
     total: number;
@@ -189,8 +185,6 @@ export class StellarMonitorController {
       undefined,
       undefined,
       deliveryStatus,
-      contractId,
-      sourceAccount,
     );
 
     return {
@@ -201,40 +195,17 @@ export class StellarMonitorController {
     };
   }
 
-  @Get('events/contract/:contractId')
-  @ApiOperation({ summary: 'Get events for a specific contract' })
-  @ApiParam({ name: 'contractId', description: 'Contract ID' })
-  @ApiQuery({ name: 'eventType', required: false, enum: EventType })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiResponse({ status: 200, description: 'List of contract events' })
-  async getContractEvents(
-    @Param('contractId') contractId: string,
-    @Query('eventType') eventType?: EventType,
-    @Query('limit') limit?: string,
-  ): Promise<StellarEvent[]> {
-    const limitNum = parseInt(limit || '100', 10);
-    return this.eventService.getContractEvents(contractId, eventType, limitNum);
-  }
-
-  @Get('events/account/:account')
-  @ApiOperation({ summary: 'Get events for a specific account' })
-  @ApiParam({ name: 'account', description: 'Account address' })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiResponse({ status: 200, description: 'List of account events' })
-  async getAccountEvents(
-    @Param('account') account: string,
-    @Query('limit') limit?: string,
-  ): Promise<StellarEvent[]> {
-    const limitNum = parseInt(limit || '100', 10);
-    return this.eventService.getEventsByAccount(account, limitNum);
-  }
-
-  @Get('events/transaction/:txHash')
-  @ApiOperation({ summary: 'Get events for a specific transaction' })
-  @ApiParam({ name: 'txHash', description: 'Transaction hash' })
-  @ApiResponse({ status: 200, description: 'List of transaction events' })
-  async getTransactionEvents(@Param('txHash') txHash: string): Promise<StellarEvent[]> {
-    return this.eventService.getEventsByTransaction(txHash);
+  @Get('events/:id')
+  @ApiOperation({ summary: 'Get a specific stellar event' })
+  @ApiParam({ name: 'id', description: 'Event ID' })
+  @ApiResponse({ status: 200, description: 'Event details' })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async getEvent(@Param('id') id: string): Promise<StellarEvent> {
+    const event = await this.eventService.getEventById(id);
+    if (!event) {
+      throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
+    }
+    return event;
   }
 
   @Get('stats')
@@ -305,37 +276,21 @@ export class StellarMonitorController {
     );
   }
 
-  @Get('health')
-  @ApiOperation({ summary: 'Get monitoring system health status' })
-  @ApiResponse({ status: 200, description: 'Health status' })
-  async getHealth(): Promise<{
-    status: 'healthy' | 'degraded' | 'unhealthy';
-    monitor: any;
-    consumers: any;
-    delivery: any;
-    timestamp: string;
-  }> {
-    const [consumerStats, deliveryStats] = await Promise.all([
-      this.consumerService.getStats(),
-      this.webhookService.getDeliveryStats(),
-    ]);
-
-    const monitorStatus = this.monitorService.getStatus();
-    
-    // Determine overall health
-    let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
-    
-    if (!monitorStatus.isMonitoring) {
-      status = 'unhealthy';
-    } else if (deliveryStats.pendingEvents > 100 || consumerStats.suspendedConsumers > 0) {
-      status = 'degraded';
-    }
-
-    return {
-      status,
-      monitor: monitorStatus,
-      consumers: consumerStats,
-      delivery: deliveryStats,
-      timestamp: new Date().toISOString(),
-    };
+  @Post('simulate/offer')
+  @ApiOperation({ summary: 'Simulate an offer event' })
+  @ApiResponse({ status: 201, description: 'Simulated event created' })
+  async simulateOffer(
+    @Body()
+    body?: {
+      seller?: string;
+      sellingAmount?: string;
+      buyingAmount?: string;
+    },
+  ): Promise<StellarEvent> {
+    return this.monitorService.simulateOfferEvent(
+      body?.seller,
+      body?.sellingAmount || '1000',
+      body?.buyingAmount || '50',
+    );
   }
+}

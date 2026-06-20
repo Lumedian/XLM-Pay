@@ -30,7 +30,7 @@ export class MarketCacheService {
         ]);
 
         this.logger.debug(`Cache hit: ${cacheKey}`);
-        return cached && typeof cached === 'string' ? JSON.parse(cached) : null;
+        return JSON.parse(cached) as T;
       }
 
       // Record cache miss
@@ -190,10 +190,10 @@ export class MarketCacheService {
       const [hits, misses, totalKeys] = await Promise.all([
         this.redisService.client
           .get(`${namespace}:stats:hits`)
-          .then((v) => parseInt(v as string || '0', 10)),
+          .then((v) => parseInt(v || '0', 10)),
         this.redisService.client
           .get(`${namespace}:stats:misses`)
-          .then((v) => parseInt(v as string || '0', 10)),
+          .then((v) => parseInt(v || '0', 10)),
         this.redisService.client
           .keys(`${namespace}:*`)
           .then(
@@ -242,10 +242,10 @@ export class MarketCacheService {
       const [totalHits, totalMisses] = await Promise.all([
         this.redisService.client
           .get('market:cache:total-hits')
-          .then((v) => parseInt(v as string || '0', 10)),
+          .then((v) => parseInt(v || '0', 10)),
         this.redisService.client
           .get('market:cache:total-misses')
-          .then((v) => parseInt(v as string || '0', 10)),
+          .then((v) => parseInt(v || '0', 10)),
       ]);
 
       const total = totalHits + totalMisses;

@@ -3,7 +3,7 @@ import { Server, Socket } from 'socket.io';
 import { VoiceSessionService } from './voice-session.service';
 import { LlmService } from './llm.service';
 import { ConversationState } from '../types/conversation-state.enum';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID as uuidv4 } from 'crypto';
 
 export interface StreamingChunk {
   id: string;

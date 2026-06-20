@@ -2,8 +2,14 @@ name: Contracts CI
 
 on:
   pull_request:
+    paths:
+      - 'Contracts/**'
+      - '.github/workflows/contracts.yml'
   push:
     branches: [main]
+    paths:
+      - 'Contracts/**'
+      - '.github/workflows/contracts.yml'
 
 jobs:
   test:
@@ -14,5 +20,4 @@ jobs:
         with:
           toolchain: stable
           override: true
-      - run: cargo test --all
-        working-directory: Contracts
+      - run: cd Contracts && cargo test --all

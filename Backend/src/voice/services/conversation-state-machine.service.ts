@@ -27,6 +27,9 @@ export class ConversationStateMachineService {
       ConversationState.LISTENING,
       ConversationState.IDLE,
     ],
+    // Sink states — no valid outbound transitions
+    [ConversationState.STALE]: [],
+    [ConversationState.TERMINATED]: [],
   };
 
   canTransition(from: ConversationState, to: ConversationState): boolean {

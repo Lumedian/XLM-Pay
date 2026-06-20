@@ -4,12 +4,6 @@ export enum EventType {
   CONTRACT = 'contract',
   ACCOUNT = 'account',
   TRUSTLINE = 'trustline',
-  TRANSFER = 'transfer',
-  MINT = 'mint',
-  BURN = 'burn',
-  STAKE = 'stake',
-  UNSTAKE = 'unstake',
-  REWARD = 'reward',
 }
 
 export enum DeliveryStatus {
@@ -63,58 +57,6 @@ export interface OfferEventPayload {
 export interface ContractEventPayload {
   contractId: string;
   topics: string[];
-  data: any;
+  data: string;
   function?: string;
-  eventIndex: number;
-}
-
-export interface TransferEventPayload {
-  from: string;
-  to: string;
-  amount: string;
-  assetType: string;
-  assetCode?: string;
-  assetIssuer?: string;
-  contractId?: string;
-}
-
-export interface MintEventPayload {
-  to: string;
-  amount: string;
-  assetType: string;
-  assetCode?: string;
-  assetIssuer?: string;
-  contractId: string;
-}
-
-export interface BurnEventPayload {
-  from: string;
-  amount: string;
-  assetType: string;
-  assetCode?: string;
-  assetIssuer?: string;
-  contractId: string;
-}
-
-export interface StakeEventPayload {
-  user: string;
-  amount: string;
-  stakingContract: string;
-  lockPeriod?: number;
-  rewardMultiplier?: number;
-}
-
-export interface UnstakeEventPayload {
-  user: string;
-  amount: string;
-  stakingContract: string;
-  rewardsEarned?: string;
-}
-
-export interface RewardEventPayload {
-  user: string;
-  amount: string;
-  rewardType: string;
-  reason?: string;
-  contractId: string;
 }

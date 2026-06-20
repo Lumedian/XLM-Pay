@@ -7,7 +7,7 @@ import supertest from 'supertest';
 
 import { AuditModule } from './audit.module';
 import { AuditService } from './audit.service';
-import { AuditLog } from './audit.entity';
+import { AuditLog, AuditLogArchive } from './audit.entity';
 
 describe('Audit Integration', () => {
   let app: INestApplication;
@@ -17,6 +17,8 @@ describe('Audit Integration', () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ envFilePath: '.env.test', isGlobal: true }),
+
+        // Configure test database connection
         TypeOrmModule.forRootAsync({
           imports: [ConfigModule],
           inject: [ConfigService],
@@ -27,18 +29,20 @@ describe('Audit Integration', () => {
             username: config.get('DB_USERNAME'),
             password: config.get('DB_PASSWORD'),
             database: config.get('DB_DATABASE'),
-            entities: [AuditLog],
-            synchronize: true, // auto-create tables in test DB
+            entities: [AuditLog, AuditLogArchive],
+            synchronize: true, // Auto-create schema for tests
             logging: false,
           }),
         }),
-        TypeOrmModule.forFeature([AuditLog]),
+
+        TypeOrmModule.forFeature([AuditLog, AuditLogArchive]),
         AuditModule,
       ],
       providers: [
         {
+          // Bypass authorization checks during integration tests
           provide: APP_GUARD,
-          useValue: { canActivate: () => true }, // skip RBAC for tests
+          useValue: { canActivate: () => true },
         },
       ],
     }).compile();
@@ -50,18 +54,20 @@ describe('Audit Integration', () => {
   });
 
   afterAll(async () => {
+    // Cleanly shut down Nest application
     await app.close();
   });
 
   it('should log an action and retrieve it via admin endpoint', async () => {
-    // Clear table first
-    await auditService['auditRepository'].clear();
+    // Ensure test starts with an empty audit table
+    await auditService.clearAllLogs();
 
-    // Log action
+    // Create a test audit log entry
     await auditService.logAction('USER_CREATED', 'admin-id', 'user-123', {
       email: 'test@example.com',
     });
 
+    // Verify audit log can be retrieved through API
     const res = await supertest(app.getHttpServer())
       .get('/admin/audit/logs')
       .expect(200);

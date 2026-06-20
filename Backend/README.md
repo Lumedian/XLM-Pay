@@ -1,164 +1,217 @@
-Stellara_backend
-🚀 Stellara Backend — Web3 Crypto Academy Server
+# XLMPay Backend
 
-Stellara Backend is the server-side application powering Stellara AI, a next-generation Web3 learning and social trading platform built on the Stellar blockchain ecosystem. It is designed for crypto learners and traders who need real-time communication, secure account systems, AI-assisted learning tools, and on-chain trading services.
+The service layer that lets **recipients** (merchants, payroll systems, landlords, anyone receiving recurring payments) integrate with XLMPay without writing Soroban contract calls themselves.
 
-This backend manages authentication, courses, rewards, social feeds, messaging, AI integrations, and blockchain interactions, while exposing REST APIs and WebSocket gateways consumed by the Stellara AI frontend.
+This service does not hold funds and does not have signing authority over any payer's wallet. Its job is to track billing schedules, trigger `pull()` calls on the [`contract/`](../contract) at the right time, index on-chain activity for fast lookups, and notify recipients of outcomes. All actual fund movement and limit enforcement happens on-chain — this backend is a convenience and orchestration layer, not a trust layer.
 
-🚀 Overview
-Stellara AI is designed to educate, empower, and connect crypto users by combining:
+---
 
-A crypto learning academy with structured courses and quizzes
-An AI-powered assistant with text and voice guidance
-A social crypto network with posts, comments, and interactions
-Real-time messaging for one-on-one and group discussions
-On-chain trading tools integrated with Stellar wallets
-Live market news and insights powered by AI
-The backend is responsible for securely managing the core application logic, database interactions, and blockchain integrations.
+# 🚀 What This Service Does
 
-🧠 Core Features
-🤖 Stellara AI Assistant
-Text & voice-based AI crypto mentor
-Explains trading strategies, blockchain concepts, and Stellar-specific tools
-Provides market insights & educational guidance (not financial advice)
+* Expose a REST API recipients can integrate against instead of calling Soroban directly
+* Track billing cycles per authorization and trigger `pull()` at the correct time
+* Index on-chain events (successful pulls, failed pulls, revocations) for fast querying — the chain remains the source of truth; this is a read cache, not an authority
+* Send webhook notifications to recipients on pull success, pull failure, and revocation
+* Provide authorization status lookups (active / expired / revoked) without requiring a direct RPC call from the recipient's system
+* Surface basic recipient-side data: upcoming pulls, payment history, failure reasons
 
-🛡️ **Error handling & Observability**
-* Structured JSON logging with correlation IDs for tracing requests across services (`x-correlation-id` header is emitted on every response)
-* Global exception filter with error categorization and severity levels
-* Centralized error tracking stub (easily swapped for Sentry/Datadog)
-* Prometheus metrics exposed at `/metrics` including error rate counters
-* Critical errors automatically escalate to alerts
+This service does **not**:
 
-🎓 Crypto Academy
-Structured learning paths (Beginner → Pro)
-Stellar & Soroban smart contract education
-Interactive quizzes and progress tracking
-🗣 Social Crypto Feed
-Post updates, ideas, and market thoughts
-Like, comment, repost (tweet-style)
-Follow other traders & educators
-💬 Community Chat
-One-on-one messaging
-Group discussions & learning channels
-Trading & ecosystem-focused rooms
-📈 Trading & Wallet
-Trade Stellar-based assets
-Freighter wallet integration
-Portfolio overview & transaction history
-📰 News & Market Intelligence
-Real-time crypto news
-Stellar ecosystem updates
-Market trend summaries via AI
-🛠 Technology Stack
-Backend
-NestJS – API framework
-PostgreSQL – Relational database
-Redis – Caching & real-time messaging
-WebSocket Gateway – Real-time chat & feed
-Blockchain
-Stellar SDK & Horizon API
-Soroban Smart Contracts
-Freighter Wallet integration
-AI & Voice
-LLM API (OpenAI or equivalent)
-Speech-to-Text (Whisper or similar)
-Text-to-Speech (TTS)
-Infrastructure
-Docker for containerization
-AWS / Railway / Render for backend hosting
-Vercel for frontend deployment
-💎 Why Stellara AI Works
-Instantly signals AI intelligence
-Strong connection to Stellar blockchain
-Easy to market & brand
-Scales to mobile apps, APIs, and future tools
-Credible to investors and partners
-⚡ Getting Started
+* hold custody of any funds
+* have the ability to create, modify, or widen a payment authorization — only the payer can do that, by signing on-chain
+* bypass any contract-enforced limit (amount cap, frequency cap, expiry) — it can only call `pull()` and let the contract accept or reject it
 
-✅ Requirements
+---
 
-- Node.js v18+
-- PostgreSQL
-- Redis
-- npm or pnpm
+# 🏗 How It Fits In
 
-📦 Installation
+```text
+Recipient's system
+       │
+       │  REST API calls (check status, register webhook, view history)
+       ▼
+┌─────────────────────┐
+│   XLMPay Backend      │
+│  • Scheduler           │──── calls pull() at the right time ────►  Soroban Contract
+│  • Event Indexer       │◄─── reads on-chain events ───────────────  (source of truth)
+│  • Webhook Dispatcher  │
+│  • API Layer           │
+└─────────────────────┘
+       │
+       │  webhook (pull succeeded/failed, authorization revoked)
+       ▼
+Recipient's system
+```
+
+The backend polls or subscribes to on-chain events to stay in sync, but never assumes its own database is authoritative over the chain. If the indexed state and on-chain state ever disagree, the chain wins.
+
+---
+
+# 🧑‍💻 Tech Stack
+
+* **Node.js** — runtime
+* **Express / NestJS** — API framework
+* **PostgreSQL** — indexed authorization and pull-history data
+* **Stellar SDK** — submitting `pull()` transactions and reading contract state
+* **BullMQ / cron-based scheduler** — triggering pulls on schedule (exact choice TBD, see [Scheduling](#-scheduling-approach))
+* **Redis** (optional) — job queue backing store, if BullMQ is used
+
+---
+
+# 📁 Folder Structure
+
+```text
+backend/
+│
+├── src/
+│   ├── api/                     # REST route handlers
+│   │   ├── authorizations.ts     # status lookups, history
+│   │   └── webhooks.ts           # webhook registration endpoints
+│   │
+│   ├── scheduler/                # Billing cycle tracking and pull triggering
+│   │   ├── jobs.ts
+│   │   └── pull-runner.ts        # calls contract pull() at the scheduled time
+│   │
+│   ├── indexer/                  # Listens to / polls on-chain events
+│   │   ├── eventListener.ts
+│   │   └── sync.ts               # reconciles local DB with chain state
+│   │
+│   ├── webhooks/                 # Outbound webhook dispatch + retry logic
+│   │   └── dispatcher.ts
+│   │
+│   ├── db/                       # Database models and migrations
+│   │   ├── models/
+│   │   └── migrations/
+│   │
+│   ├── lib/
+│   │   ├── stellar.ts             # Stellar SDK setup, network config
+│   │   └── contract.ts            # Soroban contract call wrappers
+│   │
+│   └── server.ts                 # App entrypoint
+│
+├── tests/
+│
+├── .env.example
+├── tsconfig.json
+├── package.json
+└── README.md                     # This file
+```
+
+---
+
+# 📦 Installation & Setup
+
+## Prerequisites
+
+* Node.js 18+
+* PostgreSQL (local or hosted)
+* Redis (only if using a queue-backed scheduler)
+* npm / yarn / pnpm
+
+## Install Dependencies
 
 ```bash
-git clone https://github.com/stellara-network/Stellara_Contracts
-cd Stellara_Contracts/Backend
+cd backend
 npm install
 ```
 
-🔐 Secrets Management
+## Environment Variables
 
-This project uses **HashiCorp Vault** for secure secrets management. Secrets are NOT stored in the repository.
+```bash
+cp .env.example .env
+```
 
-**Quick Start:**
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `STELLAR_NETWORK` | `testnet` or `mainnet` |
+| `SOROBAN_RPC_URL` | RPC endpoint for the Soroban network being used |
+| `CONTRACT_ID` | Deployed XLMPay Soroban contract address |
+| `PULL_SIGNER_SECRET` | Keypair used to submit `pull()` transactions (see [Security Notes](#-security-notes) — this key has **no** authority over payer funds) |
+| `REDIS_URL` | Only required if the scheduler uses a Redis-backed queue |
+| `WEBHOOK_SIGNING_SECRET` | Used to sign outbound webhook payloads so recipients can verify authenticity |
 
-1. **Local Development with Vault:**
-   ```bash
-   # Start Vault dev server (in a separate terminal)
-   vault server -dev
-   
-   # In another terminal, provision development secrets
-   export VAULT_ADDR='http://localhost:8200'
-   export VAULT_TOKEN='devroot'
-   ./scripts/vault/provision-dev.sh
-   ```
+## Run Database Migrations
 
-2. **Local Development with .env.local:**
-   ```bash
-   # Create .env.local (ignored by git)
-   cp .env.example .env.local
-   # Edit .env.local with your development secrets
-   ```
+```bash
+npm run migrate
+```
 
-**For detailed setup instructions, see:**
-- [Local Secrets Setup Guide](./docs/LOCAL_SECRETS_SETUP.md)
-- [Secrets Management Strategy](./docs/SECRETS_MANAGEMENT.md)
-- [Vault Client Implementation](./docs/VAULT_CLIENT_NODEJS.md)
+## Run Locally
 
-⚠️ **SECURITY**: Never commit real secrets to the repository. See [.gitignore](.gitignore) for ignored files.
+```bash
+npm run dev
+```
 
-▶ Run Development Server npm run start:dev
+## Build for Production
 
-▶ Run Development Server npm run start:dev
+```bash
+npm run build
+npm start
+```
 
-🧪 Testing npm run test npm run test:e2e
+---
 
-🤝 Contributing The first step is to Fork the repository then you Create a feature branch Commit your changes git pull latest changes to avoid conflicts Submit a pull request Issues and feature requests are welcome.
+# 🕒 Scheduling Approach
 
-🗄️ Database & Migrations Workflow
+Each authorization has a defined interval (e.g., "every 30 days"). The scheduler:
 
-Para garantizar la integridad de los datos y la consistencia entre entornos, este proyecto utiliza **TypeORM Migrations** y **Docker**.
+1. Reads active authorizations from the indexed database
+2. Determines which ones are due for a pull
+3. Submits a `pull()` call to the contract for each
+4. Records the result (success/failure) and reconciles against the on-chain event in the next sync pass
 
-1. Infraestructura Local
-Levanta la base de datos PostgreSQL utilizando el contenedor preconfigurado:
-bash
-docker-compose up -d
+If a pull fails (e.g., insufficient payer balance, authorization revoked since last sync), the failure is recorded and a webhook is dispatched — there is currently no automatic retry. See the [root roadmap](../README.md#-future-roadmap) for planned retry logic.
 
-Nota: La base de datos está mapeada al puerto 5433 para evitar conflictos con instalaciones locales preexistentes.
+---
 
-2. Comandos de Migración
-Utiliza estos scripts para gestionar el esquema de la base de datos sin usar synchronize: true:
+# 🔌 API Overview
 
-Generar Migración: (Ejecutar después de modificar una entidad .entity.ts)
+> Full request/response schemas live in [`docs/`](../docs) once published. High-level surface:
 
-Bash
-npm run migration:generate -- src/database/migrations/NombreDeLaMigracion
-Aplicar Migraciones: (Sincroniza tu base de datos local con los últimos cambios)
+| Endpoint | Purpose |
+|---|---|
+| `GET /authorizations/:id` | Look up status of a specific authorization |
+| `GET /authorizations?recipient=...` | List authorizations for a given recipient address |
+| `GET /authorizations/:id/history` | Pull history for an authorization |
+| `POST /webhooks` | Register a webhook URL for a recipient |
+| `POST /webhooks/test` | Send a test event to a registered webhook |
 
-Bash
-npm run migration:run
-Revertir Cambios: (Deshace la última migración aplicada)
+All write actions that affect an authorization itself (create, revoke) happen on-chain via the payer's wallet — this API is read/orchestration only, it cannot create or alter authorizations on a payer's behalf.
 
-Bash
-npm run migration:revert
+---
 
-3. Buenas Prácticas 
-Nunca modifiques manualmente las tablas en la base de datos; usa siempre archivos de migración.
+# 🧪 Testing
 
-Revisa el archivo generado en src/database/migrations/ antes de hacer commit para asegurar que el SQL es el esperado.
+```bash
+npm test
+```
 
-Asegúrate de que tu archivo .env apunte al puerto 5433 si usas el entorno Docker provisto.
+Tests cover:
+
+* API route handlers (request validation, response shapes)
+* scheduler logic (correctly identifying due pulls)
+* indexer reconciliation (local DB vs. mocked on-chain state)
+* webhook dispatch and retry behavior
+
+---
+
+# 🔐 Security Notes
+
+* The backend holds a signer key (`PULL_SIGNER_SECRET`) used only to **submit** `pull()` transactions. This key has no special authority — it can only trigger a pull attempt, and the contract independently enforces whether that pull is actually allowed (amount, frequency, expiry, revocation status). Compromise of this key lets an attacker spam pull attempts, all of which the contract will reject if they violate the authorization — it does **not** let an attacker move funds beyond what the payer already authorized.
+* The backend's database is a **cache/index**, not a source of truth. Any discrepancy between indexed state and on-chain state must resolve in favor of the chain. Do not build recipient-facing logic that trusts the database over a fresh on-chain check for anything safety-critical.
+* Webhook payloads are signed (`WEBHOOK_SIGNING_SECRET`) so recipients can verify a webhook actually originated from this service before acting on it.
+* This service has not undergone a third-party security audit. See the [root README's Threat Model](../README.md#%EF%B8%8F-threat-model--limitations) before relying on it in production.
+
+---
+
+# 🤝 Contributing
+
+See the [root README](../README.md) for overall contribution guidelines. Backend-specific notes:
+
+* New contract interactions should go through `lib/contract.ts`, not be called ad hoc elsewhere
+* Any change to indexer reconciliation logic should include tests for the "chain and DB disagree" case
+* Run `npm run lint` and `npm test` before opening a PR
+
+---
+

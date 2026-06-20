@@ -1,56 +1,156 @@
-Stellara AI – The Intelligent Web3 Crypto Academy
+# XLMPay Frontend
 
-Stellara AI is a next-generation Web3 platform built on the Stellar blockchain ecosystem, designed to educate, empower, and connect crypto users through AI-driven learning, social interaction, and real trading tools. The platform combines a crypto learning academy, an AI-powered assistant with voice and chat, a social crypto network, real-time user messaging, live market news, and on-chain trading — all within a single decentralized application. Stellara AI simplifies complex crypto concepts, helps users make informed trading decisions, and creates a collaborative environment where learners and traders grow together.
+The payer-facing web application for XLMPay — a non-custodial recurring payments protocol on Stellar.
 
-🧠 Core Features (Polished) 🤖 Stellara AI Assistant
+This app is how a payer connects their Stellar wallet, creates a payment authorization (subscription, payroll, rent, etc.), monitors its status, and revokes it whenever they choose. It does not hold funds, store private keys, or execute pulls itself — it only constructs and submits transactions that the user signs with their own wallet.
 
-Text & voice-based AI crypto mentor Explains trading strategies, blockchain concepts, and Stellar-specific tools
+---
 
-Market insights & educational guidance (Not financial advice — education-focused)
+# 🚀 What This App Does
 
-🎓 Crypto Academy
+* Connect a Stellar wallet (Freighter, Albedo, or other supported wallet extensions)
+* Create a new payment authorization by setting:
+  * recipient address
+  * asset (XLM, USDC, or other Stellar asset)
+  * maximum amount per pull
+  * minimum interval between pulls
+  * expiry date or maximum number of pulls
+* View all active, expired, and revoked authorizations tied to the connected wallet
+* View pull history for each authorization (timestamps, amounts, success/failure)
+* Revoke an active authorization at any time
+* See upcoming/expected pull dates for active authorizations
 
-Structured learning paths (Beginner → Pro) Stellar & Soroban smart contract education Interactive quizzes & progress tracking 🗣 Social Crypto Feed Post updates, ideas, and market thoughts Like, comment, repost (tweet-style) Follow other traders & educators
+This app talks to the [`contract/`](../contract) layer for on-chain reads/writes and optionally to the [`backend/`](../backend) API for indexed history and notifications.
 
-💬 Community Chat
+---
 
-One-on-one messaging Group discussions & learning channels Trading & ecosystem-focused rooms
+# 🧑‍💻 Tech Stack
 
-📈 Trading & Wallet
+* **Next.js** — application framework
+* **React** — UI library
+* **TypeScript** — type safety
+* **Tailwind CSS** — styling
+* **Stellar SDK** — building and submitting Stellar/Soroban transactions
+* **Wallet integration** — Freighter (primary), with Albedo/other Stellar wallet support planned
 
-Trade Stellar-based assets Freighter wallet integration Portfolio overview & transaction history 📰 News & Market Intelligence
+---
 
-Real-time crypto news
+# 📁 Folder Structure
 
-Stellar ecosystem updates
+```text
+frontend/
+│
+├── app/                        # Next.js app router pages
+│   ├── page.tsx                 # Landing / wallet connect
+│   ├── authorizations/          # List + detail views for authorizations
+│   └── authorizations/new/      # Create authorization flow
+│
+├── components/                 # Reusable UI components
+│   ├── WalletConnect.tsx
+│   ├── AuthorizationCard.tsx
+│   ├── AuthorizationForm.tsx
+│   └── PullHistoryTable.tsx
+│
+├── lib/                         # Helpers and integrations
+│   ├── stellar.ts               # Stellar SDK setup, network config
+│   ├── contract.ts              # Soroban contract read/write calls
+│   └── api.ts                   # Backend API client (optional indexed data)
+│
+├── hooks/                       # React hooks
+│   ├── useWallet.ts
+│   └── useAuthorizations.ts
+│
+├── public/                      # Static assets
+│
+├── styles/                      # Global styles (if not fully Tailwind-driven)
+│
+├── .env.example                 # Example environment variables
+├── next.config.js
+├── tailwind.config.js
+├── tsconfig.json
+├── package.json
+└── README.md                    # This file
+```
 
-Market trend summaries via AI 🛠 Technology Stack (Optimized for Stellara AI)
+---
 
-Frontend Next.js + TypeScript Tailwind CSS WebSockets (real-time chat & feed)
+# 📦 Installation & Setup
 
-Blockchain Stellar SDK Soroban Smart Contracts Horizon API Freighter Wallet
+## Prerequisites
 
-AI & Voice LLM API (OpenAI or equivalent) Speech-to-Text (Whisper or similar) Text-to-Speech (TTS)
+* Node.js 18+
+* npm / yarn / pnpm
+* A Stellar wallet browser extension (e.g., [Freighter](https://www.freighter.app/)) for local testing
 
-Infrastructure
+## Install Dependencies
 
-Docker AWS / Railway / Render Vercel (Frontend)
-
-💎 Why “Stellara AI” Works
-
-✔ Instantly signals AI intelligence ✔ Strong connection to Stellar blockchain ✔ Easy to market & brand ✔ Scales to mobile apps, APIs, and future tools ✔ Sounds credible to investors & partners
-
-🚀 Getting Started (Frontend Setup) ✅ Requirements
-
-Node.js v18 or higher npm / pnpm
-
-installation git clone https://github.com/stellara-network/Stellara_Contracts
-cd Stellara_Contracts,
-cd Frontend
+```bash
+cd frontend
 npm install
+```
 
-▶ Run Development Server npm run dev Open: http://localhost:3000
+## Environment Variables
 
-🏗 Build for Production npm run build npm run start
+Copy the example file and fill in the values for your environment:
 
-📁 Project Structure src/ ├─ app/ # Next.js App Router pages and layouts ├─ components/ # Reusable UI components ├─ context/ # React Context providers (auth, sockets, user state) ├─ hooks/ # Custom React hooks ├─ lib/ # Utilities, API clients, configs ├─ styles/ # Global styles and Tailwind setup public/ └─ assets/ # Static files (images, icons, fonts)
+```bash
+cp .env.example .env.local
+```
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_STELLAR_NETWORK` | `testnet` or `mainnet` |
+| `NEXT_PUBLIC_SOROBAN_RPC_URL` | RPC endpoint for the Soroban network being used |
+| `NEXT_PUBLIC_CONTRACT_ID` | Deployed XLMPay Soroban contract address |
+| `NEXT_PUBLIC_API_BASE_URL` | Base URL for the backend API (optional, for indexed history) |
+
+## Run Locally
+
+```bash
+npm run dev
+```
+
+The app runs at `http://localhost:3000` by default.
+
+## Build for Production
+
+```bash
+npm run build
+npm start
+```
+
+---
+
+# 🧪 Testing
+
+```bash
+npm test
+```
+
+Tests cover:
+
+* component rendering and interaction
+* wallet connection state handling
+* authorization form validation (amount, frequency, expiry inputs)
+* contract call wrappers (mocked Soroban responses)
+
+---
+
+# 🔐 Security Notes
+
+* This app **never** has access to private keys. All signing happens inside the user's wallet extension; the frontend only requests signatures and submits already-signed transactions.
+* No sensitive data is stored in browser storage. Authorization state is read live from the chain (and optionally the backend index) rather than cached client-side as a source of truth.
+* Always verify the contract address (`NEXT_PUBLIC_CONTRACT_ID`) matches the official deployed XLMPay contract before connecting a wallet with real funds — pointing this app at the wrong contract ID could result in interacting with an unverified or malicious contract.
+
+---
+
+# 🤝 Contributing
+
+See the [root README](../README.md) for overall contribution guidelines. Frontend-specific notes:
+
+* Follow the existing component structure under `components/` and `hooks/`
+* Run `npm run lint` before opening a PR
+* New contract interactions should go through `lib/contract.ts`, not be called ad hoc from components
+
+---
+

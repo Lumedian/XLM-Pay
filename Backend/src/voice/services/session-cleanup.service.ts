@@ -1,52 +1,48 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { VoiceSessionService } from './voice-session.service';
 
 @Injectable()
-export class SessionCleanupService implements OnModuleInit {
+export class SessionCleanupService {
   private readonly logger = new Logger(SessionCleanupService.name);
-  private cleanupInterval: NodeJS.Timeout;
-  private readonly CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
   constructor(private readonly voiceSessionService: VoiceSessionService) {}
 
-  async onModuleInit() {
-    this.startCleanupScheduler();
-    this.logger.log('Session cleanup service initialized');
-  }
-
-  private startCleanupScheduler() {
-    this.cleanupInterval = setInterval(async () => {
-      await this.performCleanup();
-    }, this.CLEANUP_INTERVAL_MS);
-  }
-
+  /**
+   * Runs every 5 minutes (AC-3).
+   * Invokes both cleanup strategies:
+   *  1. cleanupStaleSessions — heartbeat timeout (60 s, AC-2)
+   *  2. cleanupExpiredSessions — session-level TTL field
+   */
+  @Cron('*/5 * * * *')
   async performCleanup() {
     try {
-      this.logger.debug('Starting session cleanup...');
-      const cleanedCount =
-        await this.voiceSessionService.cleanupExpiredSessions();
+      this.logger.debug('Starting scheduled session cleanup...');
 
-      if (cleanedCount > 0) {
-        this.logger.log(`Cleaned up ${cleanedCount} expired sessions`);
+      const [staleCount, expiredCount] = await Promise.all([
+        this.voiceSessionService.cleanupStaleSessions(),
+        this.voiceSessionService.cleanupExpiredSessions(),
+      ]);
+
+      const total = staleCount + expiredCount;
+      if (total > 0) {
+        this.logger.log(
+          `Session cleanup complete: ${staleCount} stale, ${expiredCount} expired (total: ${total})`,
+        );
       } else {
-        this.logger.debug('No expired sessions to clean up');
+        this.logger.debug('No sessions to clean up');
       }
     } catch (error) {
       this.logger.error('Error during session cleanup:', error);
     }
   }
 
-  async onModuleDestroy() {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.logger.log('Session cleanup service stopped');
-    }
-  }
-
-  // Manual cleanup trigger for testing or admin use
-  async triggerCleanup(): Promise<number> {
-    const cleanedCount =
-      await this.voiceSessionService.cleanupExpiredSessions();
-    return cleanedCount;
+  /** Manual trigger for testing or admin use */
+  async triggerCleanup(): Promise<{ stale: number; expired: number }> {
+    const [stale, expired] = await Promise.all([
+      this.voiceSessionService.cleanupStaleSessions(),
+      this.voiceSessionService.cleanupExpiredSessions(),
+    ]);
+    return { stale, expired };
   }
 }

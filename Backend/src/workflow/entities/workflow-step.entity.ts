@@ -28,18 +28,19 @@ export class WorkflowStep {
   stepIndex: number;
 
   @Column({
-    type: 'varchar',
+    type: 'enum',
+    enum: StepState,
     default: StepState.PENDING,
   })
   state: StepState;
 
-  @Column('text', { nullable: true })
+  @Column('jsonb', { nullable: true })
   input?: Record<string, any>;
 
-  @Column('text', { nullable: true })
+  @Column('jsonb', { nullable: true })
   output?: Record<string, any>;
 
-  @Column('text', { nullable: true })
+  @Column('jsonb', { nullable: true })
   config?: Record<string, any>;
 
   @Column({ default: 0 })
@@ -48,27 +49,34 @@ export class WorkflowStep {
   @Column({ default: 3 })
   maxRetries: number;
 
-  // ...existing code...
-
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   startedAt?: Date;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   completedAt?: Date;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   failedAt?: Date;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ nullable: true })
+  failureReason?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
   nextRetryAt?: Date;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ default: false })
+  requiresCompensation: boolean;
+
+  @Column({ default: false })
+  isCompensated: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
   compensatedAt?: Date;
 
   @Column({ nullable: true })
   compensationStepName?: string;
 
-  @Column('text', { nullable: true })
+  @Column('jsonb', { nullable: true })
   compensationConfig?: Record<string, any>;
 
   @Column({ default: false })
@@ -76,15 +84,6 @@ export class WorkflowStep {
 
   @Column({ nullable: true })
   idempotencyKey?: string;
-
-  @Column({ type: 'text', nullable: true })
-  failureReason?: string;
-
-  @Column({ default: false })
-  requiresCompensation: boolean;
-
-  @Column({ default: false })
-  isCompensated: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

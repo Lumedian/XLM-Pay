@@ -1,16 +1,16 @@
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+
 [package]
 name = "shared"
 version = "0.1.0"
 edition = "2021"
 
 [features]
-default = []
-testutils = []
+testutils = ["soroban-sdk/testutils"]
 
 [dependencies]
-soroban-sdk = { version = "=20.5.0", default-features = false }
+soroban-sdk = { version = "20.5.0", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
-proptest = "1.4.0"
-token = { path = "../contracts/token" }
-soroban-sdk = { version = "=20.5.0", features = ["testutils"] }
+soroban-sdk = { version = "20.5.0", features = ["testutils"], default-features = false }

@@ -5,7 +5,6 @@ import { StellarEvent } from '../entities/stellar-event.entity';
 import { ConsumerManagementService } from './consumer-management.service';
 import { EventStorageService } from './event-storage.service';
 import { DeliveryStatus, EventType } from '../types/stellar.types';
-import { WebsocketGateway } from '../../websocket/websocket.gateway';
 
 interface DeliveryResult {
   success: boolean;
@@ -27,7 +26,6 @@ export class WebhookDeliveryService {
   constructor(
     private readonly consumerManagementService: ConsumerManagementService,
     private readonly eventStorageService: EventStorageService,
-    private readonly websocketGateway: WebsocketGateway,
   ) {
     this.httpClient = axios.create({
       timeout: 10000, // 10 second default timeout
@@ -42,17 +40,6 @@ export class WebhookDeliveryService {
   }
 
   async queueEventForDelivery(event: StellarEvent): Promise<void> {
-    // Broadcast event via WebSocket
-    await this.websocketGateway.broadcastEvent({
-      id: event.id,
-      eventType: event.eventType,
-      ledgerSequence: event.ledgerSequence,
-      timestamp: event.timestamp.toISOString(),
-      transactionHash: event.transactionHash,
-      sourceAccount: event.sourceAccount,
-      payload: event.payload,
-    });
-
     const activeConsumers =
       await this.consumerManagementService.getActiveConsumers();
 
@@ -62,19 +49,8 @@ export class WebhookDeliveryService {
       return;
     }
 
-    // Filter consumers based on their subscription preferences
-    const relevantConsumers = activeConsumers.filter(consumer =>
-      this.isEventRelevantForConsumer(event, consumer)
-    );
-
-    if (relevantConsumers.length === 0) {
-      this.logger.debug('No consumers interested in this event, marking as processed');
-      await this.eventStorageService.markEventAsProcessed(event.id);
-      return;
-    }
-
-    // Add event to queue for each relevant consumer
-    for (const consumer of relevantConsumers) {
+    // Add event to queue for each active consumer
+    for (const consumer of activeConsumers) {
       this.deliveryQueue.push({ event, consumer });
       this.logger.debug(`Queued event ${event.id} for consumer ${consumer.id}`);
     }
@@ -83,32 +59,6 @@ export class WebhookDeliveryService {
     if (!this.isProcessingQueue) {
       this.processQueue();
     }
-  }
-
-  private isEventRelevantForConsumer(event: StellarEvent, consumer: WebhookConsumer): boolean {
-    // Check event type filter
-    if (consumer.eventTypes && consumer.eventTypes.length > 0) {
-      if (!consumer.eventTypes.includes(event.eventType)) {
-        return false;
-      }
-    }
-
-    // Check contract ID filter
-    if (consumer.contractIds && consumer.contractIds.length > 0) {
-      const eventContractId = event.payload.contractId || event.sourceAccount;
-      if (!consumer.contractIds.includes(eventContractId)) {
-        return false;
-      }
-    }
-
-    // Check account filter
-    if (consumer.accounts && consumer.accounts.length > 0) {
-      if (!consumer.accounts.includes(event.sourceAccount)) {
-        return false;
-      }
-    }
-
-    return true;
   }
 
   private async processQueue(): Promise<void> {
@@ -262,15 +212,12 @@ export class WebhookDeliveryService {
     // Update consumer stats
     await this.consumerManagementService.updateDeliveryStats(consumer.id, true);
 
-    // Mark event as processed if delivered to all relevant consumers
+    // Mark event as processed if delivered to all consumers
     const activeConsumers =
       await this.consumerManagementService.getActiveConsumers();
-    const relevantConsumers = activeConsumers.filter(consumer =>
-      this.isEventRelevantForConsumer(event, consumer)
-    );
     const deliveredCount = (event.deliveredTo?.length || 0) + 1; // +1 for current delivery
 
-    if (deliveredCount >= relevantConsumers.length) {
+    if (deliveredCount >= activeConsumers.length) {
       await this.eventStorageService.markEventAsProcessed(event.id);
     }
   }

@@ -142,7 +142,9 @@ export class TracingInterceptor implements NestInterceptor {
    */
   private getClientIp(request: Request): string {
     return (
-      request.get('x-forwarded-for')?.split(',')[0] || request.ip || 'unknown'
+      (request.get('x-forwarded-for') as string)?.split(',')[0] ||
+      request.ip ||
+      'unknown'
     );
   }
 

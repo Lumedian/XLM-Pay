@@ -1,25 +1,23 @@
-import { Module, Logger } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
-// logging and error handling
-import { LoggingModule } from './logging/logging.module';
-import { StructuredLogger } from './logging/structured-logger.service';
-
 import { RedisModule } from './redis/redis.module';
 import { VoiceModule } from './voice/voice.module';
-// DatabaseModule removed - using PostgreSQL config in this module instead
 import { StellarMonitorModule } from './stellar-monitor/stellar-monitor.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { QueueModule } from './queue/queue.module';
 import { AuthModule } from './auth/auth.module';
 import { MarketDataModule } from './market-data/market-data.module';
+import { AiModule } from './ai/ai.module';
 
 import { RolesGuard } from './guards/roles.guard';
+import { ConfigValidationService } from './config/config-validation.service';
 
 import { Workflow } from './workflow/entities/workflow.entity';
 import { WorkflowStep } from './workflow/entities/workflow-step.entity';
@@ -29,78 +27,44 @@ import { LoginNonce } from './auth/entities/login-nonce.entity';
 import { RefreshToken } from './auth/entities/refresh-token.entity';
 import { ApiToken } from './auth/entities/api-token.entity';
 import { AuditModule } from './audit/audit.module';
-import { AuditLog } from './audit/audit.entity';
-import { GdprModule } from './gdpr/gdpr.module';
-import { Consent } from './gdpr/entities/consent.entity';
+import { AuditLog, AuditLogArchive } from './audit/audit.entity';
 import { VoiceJob } from './voice/entities/voice-job.entity';
 import { ThrottleModule } from './throttle/throttle.module';
-import { TenantModule } from './tenancy/tenant.module';
-import { Tenant } from './tenancy/entities/tenant.entity';
-import { TenantConfig } from './tenancy/entities/tenant-config.entity';
-import { TenantUsage } from './tenancy/entities/tenant-usage.entity';
-import { TenantInvitation } from './tenancy/entities/tenant-invitation.entity';
-import { StellarEvent } from './stellar-monitor/entities/stellar-event.entity';
-import { WebhookConsumer } from './stellar-monitor/entities/webhook-consumer.entity';
-import { BlockchainModule } from './blockchain/blockchain.module';
-import { WebsocketModule } from './websocket/websocket.module';
-
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
-    // logging comes first so correlation middleware wraps every request
-    LoggingModule,
-
     ConfigModule.forRoot({
       isGlobal: true,
     }),
 
+    ScheduleModule.forRoot(),
+
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const dbType = configService.get('DB_TYPE') || 'sqlite';
-        
-        const baseConfig: any = {
-          type: dbType,
-          synchronize: configService.get('NODE_ENV') === 'development',
-          logging: configService.get('NODE_ENV') === 'development',
-          entities: [
-            Workflow,
-            WorkflowStep,
-            User,
-            WalletBinding,
-            LoginNonce,
-            RefreshToken,
-            ApiToken,
-            AuditLog,
-            Consent,
-            VoiceJob,
-            // Tenant entities
-            Tenant,
-            TenantConfig,
-            TenantUsage,
-            TenantInvitation,
-            // Analytics entities
-            AnalyticsMetric,
-            AnalyticsAlert,
-            // Stellar Monitor entities
-            StellarEvent,
-            WebhookConsumer,
-          ],
-        };
-
-        if (dbType === 'sqlite') {
-          baseConfig.database = configService.get('DB_DATABASE') || './stellar-events.db';
-        } else {
-          baseConfig.host = configService.get('DB_HOST') || 'localhost';
-          baseConfig.port = configService.get('DB_PORT') || 5432;
-          baseConfig.username = configService.get('DB_USERNAME') || 'postgres';
-          baseConfig.password = configService.get('DB_PASSWORD') || 'password';
-          baseConfig.database = configService.get('DB_DATABASE') || 'stellara_workflows';
-        }
-
-        return baseConfig;
-      },
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        host: configService.get('DB_HOST') || 'localhost',
+        port: configService.get('DB_PORT') || 5432,
+        username: configService.get('DB_USERNAME') || 'postgres',
+        password: configService.get('DB_PASSWORD'),
+        database: configService.get('DB_DATABASE') || 'stellara_workflows',
+        entities: [
+          Workflow,
+          WorkflowStep,
+          User,
+          WalletBinding,
+          LoginNonce,
+          RefreshToken,
+          ApiToken,
+          AuditLog,
+          AuditLogArchive,
+          VoiceJob,
+        ],
+        synchronize: configService.get('NODE_ENV') === 'development',
+        logging: configService.get('NODE_ENV') === 'development',
+      }),
     }),
 
     RedisModule,
@@ -111,18 +75,16 @@ import { WebsocketModule } from './websocket/websocket.module';
     QueueModule,
     MarketDataModule,
     AuditModule,
-    GdprModule,
     ThrottleModule,
-    TenantModule,
-    AnalyticsModule,
-    BlockchainModule,
-    WebsocketModule,
+    AiModule,
+    HealthModule,
   ],
 
   controllers: [AppController],
 
   providers: [
     AppService,
+    ConfigValidationService,
 
     /**
      * Global RBAC enforcement
@@ -131,11 +93,6 @@ import { WebsocketModule } from './websocket/websocket.module';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
-    },
-    // replace the default Nest logger with our structured implementation
-    {
-      provide: Logger,
-      useClass: StructuredLogger,
     },
   ],
 })

@@ -91,15 +91,15 @@ export class QuotaService {
     const sessionKey = this.getSessionKey(sessionId);
     const rpmKey = this.getRpmKey(userId, now);
 
-    const [monthlyValue, sessionValue, rpmValue] = await Promise.all([
-      this.redisService.client.get(monthKey),
-      this.redisService.client.get(sessionKey),
-      this.redisService.client.get(rpmKey),
+    const [monthlyUsage, sessionUsage, rpmUsage] = await Promise.all([
+      this.redisService.client
+        .get(monthKey)
+        .then((v) => parseInt(v || '0', 10)),
+      this.redisService.client
+        .get(sessionKey)
+        .then((v) => parseInt(v || '0', 10)),
+      this.redisService.client.get(rpmKey).then((v) => parseInt(v || '0', 10)),
     ]);
-    
-    const monthlyUsage = parseInt(monthlyValue as string ?? '0', 10);
-    const sessionUsage = parseInt(sessionValue as string ?? '0', 10);
-    const rpmUsage = parseInt(rpmValue as string ?? '0', 10);
 
     return {
       monthlyUsage,
@@ -184,8 +184,9 @@ export class QuotaService {
     try {
       const now = new Date();
       const monthKey = this.getMonthKey(userId, now);
-      const currentValue = await this.redisService.client.get(monthKey) as string | null;
-      const currentUsage = parseInt(currentValue ?? '0', 10);
+      const currentUsage = await this.redisService.client
+        .get(monthKey)
+        .then((v) => parseInt(v || '0', 10));
 
       if (currentUsage >= limit) {
         this.logger.warn(
@@ -216,7 +217,7 @@ export class QuotaService {
       const limitKey = `${this.MONTHLY_QUOTA_PREFIX}${userId}:limit`;
       const customLimit = await this.redisService.client.get(limitKey);
 
-      if (customLimit && typeof customLimit === 'string') {
+      if (customLimit) {
         return parseInt(customLimit, 10);
       }
       return this.defaultConfig.monthlyLimit;
@@ -242,10 +243,10 @@ export class QuotaService {
     const customLimit = await this.redisService.client.get(
       `${this.MONTHLY_QUOTA_PREFIX}${userId}:limit`,
     );
-    const effectiveLimit = customLimit ? parseInt(customLimit as string, 10) : limit;
+    const effectiveLimit = customLimit ? parseInt(customLimit, 10) : limit;
 
-    const currentUsage = await this.redisService.client.get(monthKey) as string | null;
-    const usage = parseInt(currentUsage ?? '0', 10);
+    const currentUsage = await this.redisService.client.get(monthKey);
+    const usage = parseInt(currentUsage || '0', 10);
 
     if (usage >= effectiveLimit) {
       this.logger.warn(
@@ -263,8 +264,8 @@ export class QuotaService {
     limit: number,
   ): Promise<void> {
     const sessionKey = this.getSessionKey(sessionId);
-    const currentUsage = await this.redisService.client.get(sessionKey) as string | null;
-    const usage = parseInt(currentUsage ?? '0', 10);
+    const currentUsage = await this.redisService.client.get(sessionKey);
+    const usage = parseInt(currentUsage || '0', 10);
 
     if (usage >= limit) {
       this.logger.warn(
@@ -283,8 +284,8 @@ export class QuotaService {
     limit: number,
   ): Promise<void> {
     const rpmKey = this.getRpmKey(userId, now);
-    const currentUsage = await this.redisService.client.get(rpmKey) as string | null;
-    const usage = parseInt(currentUsage ?? '0', 10);
+    const currentUsage = await this.redisService.client.get(rpmKey);
+    const usage = parseInt(currentUsage || '0', 10);
 
     if (usage >= limit) {
       this.logger.warn(`User ${userId} exceeded RPM limit: ${usage}/${limit}`);
