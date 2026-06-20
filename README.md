@@ -331,8 +331,6 @@ We welcome contributions from:
 3. Commit changes
 4. Open Pull Request
 
-
-
 ---
 
 # 📚 Documentation
