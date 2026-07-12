@@ -1,0 +1,1 @@
+// AuthorizationCard component - placeholder

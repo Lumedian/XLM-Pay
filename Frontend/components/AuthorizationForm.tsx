@@ -1,0 +1,1 @@
+// AuthorizationForm component - placeholder
